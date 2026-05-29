@@ -1,0 +1,13 @@
+offers.example.ru {
+  encode zstd gzip
+
+  @publicProposal path /p/*
+  header @publicProposal X-Robots-Tag "noindex, nofollow"
+
+  header {
+    X-Content-Type-Options nosniff
+    Referrer-Policy strict-origin-when-cross-origin
+  }
+
+  reverse_proxy 127.0.0.1:3000
+}
