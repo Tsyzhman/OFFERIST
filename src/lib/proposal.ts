@@ -131,7 +131,7 @@ export function slugifyShareSlug(value: string) {
 
 export function createReadableShareSlug(title: string, date = getTodayDate()) {
   const dateSlug = formatSlugDate(date);
-  const base = slugifyShareSlug(title) || "offerist";
+  const base = slugifyShareSlug(title) || "prisma";
 
   return slugifyShareSlug(`${base}-${dateSlug}`);
 }

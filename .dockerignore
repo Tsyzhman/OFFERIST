@@ -1,0 +1,15 @@
+.git
+.next
+.data
+.playwright-cli
+build
+coverage
+dev-server*.log
+dev-server*.err.log
+node_modules
+output
+screenshots
+*.tsbuildinfo
+.env
+.env.*
+

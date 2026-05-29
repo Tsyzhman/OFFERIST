@@ -109,7 +109,7 @@ export function PublicProposalView({
             <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-300">
               <span className="inline-flex items-center gap-2 rounded-md bg-paper px-3 py-1.5 font-semibold text-zinc-950">
                 <BadgeCheck size={16} aria-hidden="true" />
-                OFFERIST
+                PRISMA
               </span>
               <span>{proposal.version}</span>
               <span>{formatDate(proposal.proposalDate)}</span>

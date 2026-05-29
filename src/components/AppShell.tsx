@@ -242,7 +242,7 @@ export function AppShell() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-2xl font-semibold tracking-[0.18em] text-zinc-950">
-                OFFERIST
+                PRISMA
               </div>
               <div className="mt-1 max-w-2xl text-xs font-medium uppercase tracking-[0.16em] text-zinc-500">
                 Digital Offer & Proposal List for Interactive Scope Tracking

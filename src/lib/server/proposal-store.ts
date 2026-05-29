@@ -356,6 +356,67 @@ export async function duplicateProposal(id: string) {
   return copy;
 }
 
+export async function publishProposal(id: string) {
+  const proposal = await getProposalById(id);
+
+  if (!proposal) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  return saveProposal({
+    proposal: {
+      ...proposal,
+      status: "published",
+      publishedAt: proposal.publishedAt || now,
+      shareSettings: {
+        ...proposal.shareSettings,
+        isPublished: true,
+      },
+    },
+  });
+}
+
+export async function unpublishProposal(id: string) {
+  const proposal = await getProposalById(id);
+
+  if (!proposal) {
+    return null;
+  }
+
+  return saveProposal({
+    proposal: {
+      ...proposal,
+      status: "hidden",
+      shareSettings: {
+        ...proposal.shareSettings,
+        isPublished: false,
+      },
+    },
+  });
+}
+
+export async function regenerateProposalShareSlug(id: string) {
+  const proposal = await getProposalById(id);
+
+  if (!proposal) {
+    return null;
+  }
+
+  const shareSlug = await createUniqueShareSlug(undefined, proposal.id);
+
+  return saveProposal({
+    proposal: {
+      ...proposal,
+      shareSlug,
+      shareSettings: {
+        ...proposal.shareSettings,
+        shareSlug,
+      },
+    },
+  });
+}
+
 export async function recordEventByShareSlug(
   shareSlug: string,
   eventType: ProposalEventType,

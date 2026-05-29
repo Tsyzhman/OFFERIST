@@ -124,7 +124,7 @@ export function DashboardClient({ proposals }: DashboardClientProps) {
         <header className="flex flex-col gap-4 rounded-lg border border-white/10 bg-paper p-5 text-zinc-950 shadow-xl shadow-black/20 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
-              OFFERIST
+              PRISMA
             </p>
             <h1 className="mt-1 text-3xl font-semibold">
               Коммерческие предложения

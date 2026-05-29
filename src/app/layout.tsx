@@ -13,9 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OFFERIST",
+  title: "PRISMA",
   description:
-    "Offer Framework for Fast Estimates, Revenue, Interactive Sales & Terms",
+    "PRISMA — коммерческие предложения по приватной ссылке",
 };
 
 export default function RootLayout({

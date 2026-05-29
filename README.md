@@ -1,8 +1,8 @@
-# OFFERIST
+# PRISMA
 
-Offer Framework for Fast Estimates, Revenue, Interactive Sales & Terms.
+PRISMA — коммерческие предложения по приватной ссылке.
 
-OFFERIST помогает собирать коммерческие предложения, публиковать их по приватной клиентской ссылке и фиксировать просмотры/действия без лишних персональных данных.
+PRISMA помогает собирать коммерческие предложения, публиковать их по приватной клиентской ссылке и фиксировать просмотры/действия без лишних персональных данных.
 
 ## Команды
 
@@ -30,17 +30,17 @@ SQL-схема и русские demo data лежат в [supabase/schema.sql](s
 Для Caddy не нужны правила под каждую клиентскую ссылку. Достаточно один раз проксировать домен в Next.js:
 
 ```caddyfile
-offers.example.ru {
+prisma.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
   header @publicProposal X-Robots-Tag "noindex, nofollow"
 
-  reverse_proxy 127.0.0.1:3000
+  reverse_proxy 127.0.0.1:3007
 }
 ```
 
-Полный пример: [Caddyfile.example](Caddyfile.example). Подробности: [docs/server-sharing-with-caddy.md](docs/server-sharing-with-caddy.md).
+Полный пример: [Caddyfile.example](Caddyfile.example). Пошаговый деплой: [docs/deploy-docker-caddy.md](docs/deploy-docker-caddy.md). Подробности по ссылкам: [docs/server-sharing-with-caddy.md](docs/server-sharing-with-caddy.md).
 
 ## Роуты
 
@@ -59,4 +59,3 @@ offers.example.ru {
 - `#8e44ad` - основной акцент
 - `#e67e22` - тёплый акцент
 - `#ecf0f1` - светлая поверхность
-

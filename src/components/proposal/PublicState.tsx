@@ -13,7 +13,7 @@ export function PublicState({
     <main className="bg-noise flex min-h-screen items-center justify-center bg-main px-4 text-center text-zinc-950">
       <div className="relative z-10 max-w-md rounded-lg border border-white/10 bg-paper p-8 shadow-xl shadow-black/25">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
-          OFFERIST
+          PRISMA
         </p>
         <h1 className="mt-3 text-3xl font-semibold">{title}</h1>
         <p className="mt-4 text-sm leading-6 text-zinc-600">{copy}</p>

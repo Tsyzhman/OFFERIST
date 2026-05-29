@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import {
   createId,
-  createShareSlug,
   formatMoney,
   getEffectiveStatus,
   getPublicUrl,
@@ -71,7 +70,13 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
     }));
   }
 
-  async function persist(nextProposal = proposal, nextPassword = password) {
+  async function persist(
+    nextProposal = proposal,
+    nextPassword = password,
+    options: { notify?: boolean } = {},
+  ) {
+    const notify = options.notify ?? true;
+
     if (nextProposal.isPasswordProtected && !nextPassword.trim() && !nextProposal.passwordHash) {
       showToast("warning", "Укажите пароль для защищённой клиентской ссылки.");
       return null;
@@ -96,12 +101,49 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
     setProposal(result.proposal);
     setCurrentId(result.proposal.id);
     setPassword("");
-    showToast("success", "КП сохранено");
+    if (notify) {
+      showToast("success", "КП сохранено");
+    }
 
     if (!currentId) {
       router.replace(`/proposal/${result.proposal.id}/edit`);
     }
 
+    return result.proposal;
+  }
+
+  async function runShareAction(
+    action: "publish" | "unpublish" | "regenerate",
+    draftProposal = proposal,
+  ) {
+    const savedProposal = await persist(draftProposal, password, {
+      notify: false,
+    });
+
+    if (!savedProposal) {
+      return null;
+    }
+
+    setSaving(true);
+    const response = await fetch(`/api/proposals/${savedProposal.id}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action }),
+    });
+    const result = (await response.json()) as {
+      proposal?: Proposal;
+      error?: string;
+    };
+    setSaving(false);
+
+    if (!response.ok || !result.proposal) {
+      showToast("error", result.error || "Не удалось обновить клиентскую ссылку");
+      return null;
+    }
+
+    setProposal(result.proposal);
+    setCurrentId(result.proposal.id);
+    setPassword("");
     return result.proposal;
   }
 
@@ -116,7 +158,7 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
       },
     };
     update(next);
-    const saved = await persist(next);
+    const saved = await runShareAction("publish", next);
 
     if (saved) {
       showToast("success", "КП опубликовано");
@@ -133,7 +175,7 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
       },
     };
     update(next);
-    const saved = await persist(next);
+    const saved = await runShareAction("unpublish", next);
 
     if (saved) {
       showToast("success", "КП снято с публикации");
@@ -146,17 +188,7 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
       return;
     }
 
-    const shareSlug = createShareSlug();
-    const next = {
-      ...proposal,
-      shareSlug,
-      shareSettings: {
-        ...proposal.shareSettings,
-        shareSlug,
-      },
-    };
-    update(next);
-    const saved = await persist(next);
+    const saved = await runShareAction("regenerate");
 
     if (saved) {
       showToast("success", "Клиентская ссылка обновлена");

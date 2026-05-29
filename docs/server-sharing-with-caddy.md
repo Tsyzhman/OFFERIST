@@ -1,15 +1,15 @@
-# Публикация OFFERIST через Caddy
+# Публикация PRISMA через Caddy
 
-OFFERIST не требует отдельных Caddy-правил для каждой клиентской ссылки. Все адреса вида `/p/[shareSlug]` обрабатывает Next.js, а Caddy только проксирует домен в приложение.
+PRISMA не требует отдельных Caddy-правил для каждой клиентской ссылки. Все адреса вида `/p/[shareSlug]` обрабатывает Next.js, а Caddy только проксирует домен в приложение.
 
 ## Базовая схема
 
 ```text
-Клиент открывает https://offers.example.ru/p/secure-share-slug
+Клиент открывает https://prisma.tsyzhman.ru/p/secure-share-slug
         ↓
 Caddy принимает HTTPS-запрос
         ↓
-Caddy проксирует запрос в Next.js на 127.0.0.1:3000
+Caddy проксирует запрос в Next.js на 127.0.0.1:3007
         ↓
 Next.js ищет КП по shareSlug в Supabase
         ↓
@@ -19,7 +19,7 @@ Next.js ищет КП по shareSlug в Supabase
 ## Пример Caddyfile
 
 ```caddyfile
-offers.example.ru {
+prisma.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
@@ -30,7 +30,7 @@ offers.example.ru {
     Referrer-Policy strict-origin-when-cross-origin
   }
 
-  reverse_proxy 127.0.0.1:3000
+  reverse_proxy 127.0.0.1:3007
 }
 ```
 
@@ -61,14 +61,13 @@ PROPOSAL_ACCESS_SECRET=
 Публичная ссылка содержит сложный `shareSlug`, например:
 
 ```text
-https://offers.example.ru/p/cb3QyFDvt4d2jb
+https://prisma.tsyzhman.ru/p/cb3QyFDvt4d2jb
 ```
 
-Caddy не должен знать, существует ли такой slug. Он передает запрос приложению, а OFFERIST уже проверяет:
+Caddy не должен знать, существует ли такой slug. Он передает запрос приложению, а PRISMA уже проверяет:
 
 - КП найдено или нет;
 - опубликовано ли оно;
 - не истек ли `expiresAt`;
 - нужен ли пароль;
 - можно ли показать read-only версию клиенту.
-

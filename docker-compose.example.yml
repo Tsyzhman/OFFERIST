@@ -1,0 +1,20 @@
+services:
+  prisma:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: prisma
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3007:3000"
+    volumes:
+      - prisma-data:/app/.data
+
+volumes:
+  prisma-data:

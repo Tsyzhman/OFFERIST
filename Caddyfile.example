@@ -1,4 +1,4 @@
-offers.example.ru {
+prisma.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
@@ -9,5 +9,5 @@ offers.example.ru {
     Referrer-Policy strict-origin-when-cross-origin
   }
 
-  reverse_proxy 127.0.0.1:3000
+  reverse_proxy 127.0.0.1:3007
 }
