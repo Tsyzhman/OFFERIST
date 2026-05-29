@@ -5,7 +5,7 @@ PRISMA не требует отдельных Caddy-правил для кажд
 ## Базовая схема
 
 ```text
-Клиент открывает https://prisma.tsyzhman.ru/p/secure-share-slug
+Клиент открывает https://doplist.tsyzhman.ru/p/secure-share-slug
         ↓
 Caddy принимает HTTPS-запрос
         ↓
@@ -19,7 +19,7 @@ Next.js ищет КП по shareSlug в Supabase
 ## Пример Caddyfile
 
 ```caddyfile
-prisma.tsyzhman.ru {
+doplist.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
@@ -61,7 +61,7 @@ PROPOSAL_ACCESS_SECRET=
 Публичная ссылка содержит сложный `shareSlug`, например:
 
 ```text
-https://prisma.tsyzhman.ru/p/cb3QyFDvt4d2jb
+https://doplist.tsyzhman.ru/p/cb3QyFDvt4d2jb
 ```
 
 Caddy не должен знать, существует ли такой slug. Он передает запрос приложению, а PRISMA уже проверяет:

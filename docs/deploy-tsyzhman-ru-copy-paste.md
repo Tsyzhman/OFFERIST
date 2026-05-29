@@ -1,8 +1,8 @@
-# Копипастный деплой PRISMA на prisma.tsyzhman.ru
+# Копипастный деплой PRISMA на doplist.tsyzhman.ru
 
 Основная инструкция лежит здесь: [deploy-docker-caddy.md](deploy-docker-caddy.md).
 
-Перед командами проверь DNS: `prisma.tsyzhman.ru` должен быть `A`-записью на IP сервера.
+Перед командами проверь DNS: `doplist.tsyzhman.ru` должен быть `A`-записью на IP сервера.
 
 Этот файл оставлен как короткий алиас, чтобы не потеряться:
 
@@ -23,7 +23,7 @@ curl -I http://127.0.0.1:3007
 После этого добавь в `/etc/caddy/Caddyfile`:
 
 ```caddyfile
-prisma.tsyzhman.ru {
+doplist.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
@@ -43,7 +43,7 @@ prisma.tsyzhman.ru {
 ```bash
 sudo caddy validate --config /etc/caddy/Caddyfile
 sudo systemctl reload caddy
-curl -I https://prisma.tsyzhman.ru
+curl -I https://doplist.tsyzhman.ru
 ```
 
 Для полной версии с проверками, backup и вариантом Caddy-in-Docker смотри [deploy-docker-caddy.md](deploy-docker-caddy.md).

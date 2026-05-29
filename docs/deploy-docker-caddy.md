@@ -1,11 +1,11 @@
-# Деплой PRISMA на prisma.tsyzhman.ru с Caddy и Docker
+# Деплой PRISMA на doplist.tsyzhman.ru с Caddy и Docker
 
-Инструкция рассчитана на сервер, где Caddy уже установлен и принимает HTTPS-трафик, а PRISMA запускается отдельным Docker-контейнером. Публичный домен: `prisma.tsyzhman.ru`.
+Инструкция рассчитана на сервер, где Caddy уже установлен и принимает HTTPS-трафик, а PRISMA запускается отдельным Docker-контейнером. Публичный домен: `doplist.tsyzhman.ru`.
 
 Перед деплоем добавь DNS-запись:
 
 ```text
-prisma.tsyzhman.ru A <server-ip>
+doplist.tsyzhman.ru A <server-ip>
 ```
 
 ## 0. Подключиться к серверу
@@ -170,7 +170,7 @@ sudo nano /etc/caddy/Caddyfile
 Добавить в конец файла отдельный блок:
 
 ```caddyfile
-prisma.tsyzhman.ru {
+doplist.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
@@ -214,25 +214,25 @@ sudo systemctl status caddy --no-pager
 ## 8. Проверить сайт
 
 ```bash
-curl -I https://prisma.tsyzhman.ru
+curl -I https://doplist.tsyzhman.ru
 ```
 
 Открыть в браузере:
 
 ```text
-https://prisma.tsyzhman.ru
+https://doplist.tsyzhman.ru
 ```
 
 Публичные КП будут открываться так:
 
 ```text
-https://prisma.tsyzhman.ru/p/<shareSlug>
+https://doplist.tsyzhman.ru/p/<shareSlug>
 ```
 
 Например:
 
 ```text
-https://prisma.tsyzhman.ru/p/cb3QyFDvt4d2jb
+https://doplist.tsyzhman.ru/p/cb3QyFDvt4d2jb
 ```
 
 Caddy не нужно редактировать под каждое новое КП. Все `/p/...` ссылки обрабатывает Next.js внутри PRISMA.
@@ -251,7 +251,7 @@ docker compose logs --tail=100 prisma
 
 ```bash
 curl -I http://127.0.0.1:3007
-curl -I https://prisma.tsyzhman.ru
+curl -I https://doplist.tsyzhman.ru
 ```
 
 ## 10. Посмотреть логи
@@ -380,7 +380,7 @@ docker compose up -d --build
 В Caddyfile тогда использовать не `127.0.0.1:3007`, а имя контейнера:
 
 ```caddyfile
-prisma.tsyzhman.ru {
+doplist.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
@@ -416,14 +416,14 @@ sudo ss -ltnp | grep 3007
 Не выпускается HTTPS:
 
 ```bash
-dig +short prisma.tsyzhman.ru
+dig +short doplist.tsyzhman.ru
 sudo journalctl -u caddy --tail=200 --no-pager
 ```
 
 Публичная ссылка КП не открывается:
 
 ```bash
-curl -I https://prisma.tsyzhman.ru/p/YOUR_SHARE_SLUG
+curl -I https://doplist.tsyzhman.ru/p/YOUR_SHARE_SLUG
 ```
 
 Проверь в админке PRISMA, что КП опубликовано, не истекло и slug скопирован полностью.

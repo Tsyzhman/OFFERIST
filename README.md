@@ -30,7 +30,7 @@ SQL-схема и русские demo data лежат в [supabase/schema.sql](s
 Для Caddy не нужны правила под каждую клиентскую ссылку. Достаточно один раз проксировать домен в Next.js:
 
 ```caddyfile
-prisma.tsyzhman.ru {
+doplist.tsyzhman.ru {
   encode zstd gzip
 
   @publicProposal path /p/*
