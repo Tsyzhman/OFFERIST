@@ -75,6 +75,8 @@ type ProposalRow = {
   show_timeline: boolean;
   show_comparison_table: boolean;
   no_index: boolean;
+  approve_url: string | null;
+  discuss_url: string | null;
   assumptions: string[] | null;
   out_of_scope: string[] | null;
 };
@@ -1093,6 +1095,8 @@ function fromProposalRow(row: ProposalRow, children: ProposalChildren): Proposal
       showTimeline: row.show_timeline,
       showComparisonTable: row.show_comparison_table,
       noIndex: row.no_index,
+      approveUrl: row.approve_url ?? "",
+      discussUrl: row.discuss_url ?? "",
     },
     assumptions: row.assumptions ?? [],
     outOfScope: row.out_of_scope ?? [],
@@ -1146,6 +1150,8 @@ function toProposalRow(proposal: Proposal): ProposalRow {
     show_timeline: proposal.shareSettings.showTimeline,
     show_comparison_table: proposal.shareSettings.showComparisonTable,
     no_index: proposal.shareSettings.noIndex,
+    approve_url: proposal.shareSettings.approveUrl,
+    discuss_url: proposal.shareSettings.discussUrl,
     assumptions: proposal.assumptions,
     out_of_scope: proposal.outOfScope,
   };

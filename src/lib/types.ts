@@ -30,6 +30,8 @@ export type ShareSettings = {
   showTimeline: boolean;
   showComparisonTable: boolean;
   noIndex: boolean;
+  approveUrl: string;
+  discussUrl: string;
 };
 
 export type ProposalDeliverable = {

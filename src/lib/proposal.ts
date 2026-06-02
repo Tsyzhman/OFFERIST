@@ -234,6 +234,27 @@ export function getPublicUrl(origin: string, shareSlug: string) {
   return `${origin.replace(/\/$/, "")}/p/${shareSlug}`;
 }
 
+export function sanitizeActionUrl(value?: string) {
+  const trimmed = value?.trim() ?? "";
+
+  if (!trimmed) {
+    return "";
+  }
+
+  if (trimmed.startsWith("/") && !trimmed.startsWith("//")) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol)
+      ? trimmed
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 export function getRecommendedPackage(proposal: Proposal) {
   return (
     proposal.packages.find((item) => item.id === proposal.selectedPackageId) ??
@@ -529,6 +550,8 @@ export function normalizeProposal(value: Proposal): Proposal {
     expiresAt,
     isPublished: value.shareSettings?.isPublished ?? value.status === "published",
     accessMode: value.isPasswordProtected ? "password" : value.shareSettings?.accessMode ?? "public_link",
+    approveUrl: sanitizeActionUrl(value.shareSettings?.approveUrl),
+    discussUrl: sanitizeActionUrl(value.shareSettings?.discussUrl),
   };
 
   return {
@@ -583,6 +606,8 @@ function createDefaultShareSettings(shareSlug: string, expiresAt: string): Share
     showTimeline: true,
     showComparisonTable: true,
     noIndex: true,
+    approveUrl: "",
+    discussUrl: "",
   };
 }
 

@@ -75,6 +75,8 @@ create table if not exists public.proposals (
   show_timeline boolean not null default true,
   show_comparison_table boolean not null default true,
   no_index boolean not null default true,
+  approve_url text not null default '',
+  discuss_url text not null default '',
   assumptions text[] not null default '{}',
   out_of_scope text[] not null default '{}',
   constraint password_hash_required
@@ -87,6 +89,10 @@ create table if not exists public.proposals (
 
 alter table if exists public.proposals
   add column if not exists retention_hold boolean not null default false;
+
+alter table if exists public.proposals
+  add column if not exists approve_url text not null default '',
+  add column if not exists discuss_url text not null default '';
 
 drop trigger if exists proposals_set_updated_at on public.proposals;
 create trigger proposals_set_updated_at
