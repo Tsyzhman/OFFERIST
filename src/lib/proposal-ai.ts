@@ -6,13 +6,10 @@ import {
   normalizeProposal,
 } from "./proposal";
 import type {
-  ProcessStep,
-  ProofItem,
   Proposal,
   ProposalAiInput,
   ProposalAiPackage,
   ProposalCurrency,
-  ProposalDeliverable,
   ProposalLanguage,
   ProposalPackage,
 } from "./types";
@@ -882,4 +879,3 @@ function hasValue(value: unknown) {
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
-
