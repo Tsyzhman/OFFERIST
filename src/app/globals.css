@@ -340,6 +340,25 @@ details > summary::-webkit-details-marker {
   color: var(--brand-purple-on);
 }
 
+/* Inside the purple brand surface, faint zinc text utilities would
+   render as 10–16 % white over purple — looks like a desaturated pink
+   blur. Force readable opacities so labels stay legible. */
+:root[data-theme="dark"] .bg-zinc-900 .text-zinc-100,
+:root[data-theme="dark"] .bg-zinc-950 .text-zinc-100,
+:root[data-theme="dark"] .bg-zinc-900 .text-zinc-200,
+:root[data-theme="dark"] .bg-zinc-950 .text-zinc-200,
+:root[data-theme="dark"] .bg-zinc-900 .text-zinc-300,
+:root[data-theme="dark"] .bg-zinc-950 .text-zinc-300 {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+:root[data-theme="dark"] .bg-zinc-900 .text-zinc-400,
+:root[data-theme="dark"] .bg-zinc-950 .text-zinc-400,
+:root[data-theme="dark"] .bg-zinc-900 .text-zinc-500,
+:root[data-theme="dark"] .bg-zinc-950 .text-zinc-500 {
+  color: rgba(255, 255, 255, 0.62);
+}
+
 :root[data-theme="dark"] .hover\:bg-zinc-800:hover {
   background-color: var(--brand-purple-strong);
 }
