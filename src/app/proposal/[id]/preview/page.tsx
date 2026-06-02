@@ -28,7 +28,7 @@ export default async function ProposalPreviewPage({ params }: PageProps) {
       <div className="sticky top-0 z-50 border-b border-white/10 bg-main/90 px-4 py-3 text-paper backdrop-blur no-print">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Внутренний preview
             </p>
             <p className="text-sm text-paper/70">

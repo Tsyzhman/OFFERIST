@@ -26,6 +26,13 @@ type PublicProposalViewProps = {
   previewMode?: boolean;
 };
 
+type CtaAction =
+  | "approve"
+  | "discuss"
+  | "request_contract"
+  | "download_pdf"
+  | "client_comment";
+
 export function PublicProposalView({
   proposal,
   previewMode = false,
@@ -58,19 +65,48 @@ export function PublicProposalView({
     showToast("success", "Пакет выбран. Мы увидим ваш выбор в КП.");
   }
 
-  async function handleCta(action: string) {
+  async function handleCta(action: CtaAction) {
     if (action === "download_pdf") {
       window.print();
     }
 
+    const targetUrl = getCtaUrl(action);
+
     if (!previewMode) {
-      await track("cta_clicked", { metadata: { action, comment } });
+      await track("cta_clicked", {
+        metadata: {
+          action,
+          comment,
+          selectedPackageId: selectedPackage?.id,
+          selectedPackageName: selectedPackage?.name,
+          targetUrl: targetUrl || undefined,
+        },
+      });
+    }
+
+    if (targetUrl && !previewMode) {
+      window.location.assign(targetUrl);
+      return;
     }
 
     showToast(
       "success",
-      "Спасибо, действие зафиксировано. Мы свяжемся с вами для следующего шага.",
+      targetUrl
+        ? "В клиентской версии откроется указанная ссылка."
+        : "Спасибо, действие зафиксировано. Мы свяжемся с вами для следующего шага.",
     );
+  }
+
+  function getCtaUrl(action: CtaAction) {
+    if (action === "approve") {
+      return proposal.shareSettings.approveUrl;
+    }
+
+    if (action === "discuss") {
+      return proposal.shareSettings.discussUrl;
+    }
+
+    return "";
   }
 
   async function track(
@@ -102,29 +138,28 @@ export function PublicProposalView({
         </Button>
       </div>
 
-      <section className="bg-noise relative overflow-hidden border-b border-white/10 bg-main text-white">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(142,68,173,0.28),rgba(230,126,34,0.12)_56%,rgba(2,11,20,0)_86%)]" />
+      <section className="relative overflow-hidden border-b border-zinc-200 bg-white text-zinc-950">
         <div className="relative mx-auto grid max-w-6xl gap-10 px-5 py-16 lg:grid-cols-[1fr_320px] lg:py-20">
           <div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-300">
-              <span className="inline-flex items-center gap-2 rounded-md bg-paper px-3 py-1.5 font-semibold text-zinc-950">
+            <div className="flex flex-wrap items-center gap-3 text-sm text-zinc-500">
+              <span className="inline-flex items-center gap-2 rounded-md bg-zinc-900 px-3 py-1.5 font-semibold text-white">
                 <BadgeCheck size={16} aria-hidden="true" />
                 PRISMA
               </span>
               <span>{proposal.version}</span>
               <span>{formatDate(proposal.proposalDate)}</span>
             </div>
-            <p className="mt-10 text-sm font-semibold uppercase tracking-[0.18em] text-emerald-300">
+            <p className="mt-10 text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Подготовлено для {proposal.clientCompany || proposal.clientName || "клиента"}
             </p>
-            <h1 className="mt-4 max-w-4xl text-4xl font-semibold sm:text-6xl">
+            <h1 className="mt-4 max-w-4xl text-4xl font-semibold tracking-tight sm:text-6xl">
               {proposal.title}
             </h1>
-            <p className="mt-6 max-w-3xl text-lg leading-8 text-zinc-200">
+            <p className="mt-6 max-w-3xl text-lg leading-8 text-zinc-600">
               {proposal.shortIntro}
             </p>
           </div>
-          <div className="self-end rounded-lg border border-white/15 bg-white/[0.08] p-5 backdrop-blur">
+          <div className="self-end rounded-lg border border-zinc-200 bg-zinc-50 p-5">
             <Metric label="Клиент" value={proposal.clientName || "Не указан"} />
             <Metric
               label="Срок действия"
@@ -388,13 +423,13 @@ export function PublicProposalView({
               <p className="mt-2 text-sm text-zinc-500">{selectedPackage.duration}</p>
             ) : null}
             <div className="mt-5 grid gap-2">
-              <Button onClick={() => handleCta("discuss")}>
+              <Button onClick={() => handleCta("approve")}>
+                <CheckCircle2 size={16} aria-hidden="true" />
+                Согласовать
+              </Button>
+              <Button variant="secondary" onClick={() => handleCta("discuss")}>
                 <MessageCircle size={16} aria-hidden="true" />
                 Обсудить КП
-              </Button>
-              <Button variant="secondary" onClick={() => handleCta("select_package")}>
-                <CheckCircle2 size={16} aria-hidden="true" />
-                Выбрать этот пакет
               </Button>
               <Button variant="secondary" onClick={() => handleCta("request_contract")}>
                 <FileSignature size={16} aria-hidden="true" />
@@ -429,7 +464,7 @@ function Section({
     <section id={id} className="proposal-section border-b border-zinc-200 px-5 py-12">
       <div className="mx-auto max-w-6xl">
         <div className="mb-7 max-w-3xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
             {eyebrow}
           </p>
           <h2 className="mt-2 text-3xl font-semibold text-zinc-950">
@@ -444,11 +479,11 @@ function Section({
 
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="border-b border-white/10 py-3 first:pt-0 last:border-0 last:pb-0">
-      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-400">
+    <div className="border-b border-zinc-200 py-3 first:pt-0 last:border-0 last:pb-0">
+      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-zinc-500">
         {label}
       </div>
-      <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+      <div className="mt-1 text-lg font-semibold text-zinc-950">{value}</div>
     </div>
   );
 }

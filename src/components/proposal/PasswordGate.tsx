@@ -43,15 +43,15 @@ export function PasswordGate({
   }
 
   return (
-    <main className="bg-noise flex min-h-screen items-center justify-center bg-main px-4 text-zinc-950">
+    <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 text-zinc-950">
       <form
         onSubmit={submit}
-        className="relative z-10 w-full max-w-md rounded-lg border border-white/10 bg-paper p-8 shadow-xl shadow-black/25"
+        className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 shadow-sm"
       >
         <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent text-white">
           <LockKeyhole size={22} aria-hidden="true" />
         </div>
-        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+        <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Защита паролем
         </p>
         <h1 className="mt-2 text-2xl font-semibold">

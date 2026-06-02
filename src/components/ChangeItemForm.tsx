@@ -73,7 +73,7 @@ export function ChangeItemForm({
     <section className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
             {isNew ? "Новая корректировка" : "Редактирование"}
           </p>
           <h2 className="mt-1 text-xl font-semibold text-zinc-950">

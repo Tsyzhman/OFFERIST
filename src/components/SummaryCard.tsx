@@ -32,7 +32,7 @@ export function SummaryCard({ data, compact = false }: SummaryCardProps) {
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
             Сводка proposal
           </p>
           <h2 className="mt-1 text-lg font-semibold text-zinc-950">

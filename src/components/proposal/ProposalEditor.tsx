@@ -225,13 +225,13 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
   }
 
   return (
-    <main className="bg-noise min-h-screen bg-main text-paper">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-main/90 backdrop-blur no-print">
+    <main className="min-h-screen bg-zinc-50 text-zinc-900">
+      <header className="sticky top-0 z-40 border-b border-zinc-200 bg-white/90 backdrop-blur no-print">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3">
             <Link
               href="/"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-md border border-white/10 bg-white/5 text-paper hover:bg-white/10"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-md text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900"
               aria-label="Назад к списку КП"
               title="Назад к списку КП"
             >
@@ -242,9 +242,9 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
                 <Badge className={proposalStatusTone[status]}>
                   {proposalStatusLabels[status]}
                 </Badge>
-                <span className="text-sm text-paper/60">Версия {proposal.version}</span>
+                <span className="text-sm text-zinc-500">Версия {proposal.version}</span>
               </div>
-              <h1 className="mt-1 text-xl font-semibold">
+              <h1 className="mt-1 text-xl font-semibold text-zinc-950">
                 {mode === "new" ? "Новое КП" : "Редактировать КП"}
               </h1>
             </div>
@@ -379,10 +379,10 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
         </div>
 
         <aside className="space-y-4 xl:sticky xl:top-24 xl:self-start no-print">
-          <section className="rounded-lg border border-white/10 bg-paper p-4 text-zinc-950 shadow-xl shadow-black/20">
+          <section className="rounded-lg border border-zinc-200 bg-white p-4 text-zinc-950 shadow-sm">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
                   Публикация
                 </p>
                 <h2 className="mt-1 text-lg font-semibold">Клиентская ссылка</h2>
@@ -420,7 +420,7 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
             </div>
           </section>
 
-          <section className="rounded-lg border border-white/10 bg-paper p-4 text-zinc-950 shadow-xl shadow-black/20">
+          <section className="rounded-lg border border-zinc-200 bg-white p-4 text-zinc-950 shadow-sm">
             <h2 className="text-lg font-semibold">Сводка</h2>
             <div className="mt-4 space-y-3 text-sm text-zinc-600">
               <SummaryRow label="Пакетов" value={String(proposal.packages.length)} />
@@ -522,6 +522,25 @@ function SharingSettings({
           />
           <TextInput label="Срок действия ссылки" type="date" value={proposal.expiresAt} onChange={(expiresAt) => onChange({ expiresAt, shareSettings: { ...proposal.shareSettings, expiresAt } })} />
           <TextInput label="Пароль" type="password" value={password} helper={proposal.passwordHash ? "Оставьте пустым, чтобы сохранить текущий пароль." : "Пароль будет сохранён только как hash."} onChange={onPasswordChange} />
+        </div>
+
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <TextInput
+            label="Ссылка для кнопки «Согласовать»"
+            type="url"
+            value={proposal.shareSettings.approveUrl}
+            placeholder="https://example.com/approve"
+            helper="Оставьте пустым, чтобы только фиксировать клик."
+            onChange={(approveUrl) => updateShare({ approveUrl })}
+          />
+          <TextInput
+            label="Ссылка для кнопки «Обсудить»"
+            type="url"
+            value={proposal.shareSettings.discussUrl}
+            placeholder="https://t.me/username"
+            helper="Поддерживаются http(s), mailto, tel и внутренние ссылки."
+            onChange={(discussUrl) => updateShare({ discussUrl })}
+          />
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">

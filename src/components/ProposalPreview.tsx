@@ -73,7 +73,7 @@ export function ProposalPreview({
           </div>
 
           <div className="mt-10 max-w-4xl">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-emerald-700">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-zinc-500">
               Подготовлено для {data.project.clientName || "клиента"}
             </p>
             <h1 className="mt-3 text-4xl font-semibold text-zinc-950 sm:text-6xl">
@@ -338,7 +338,7 @@ function SectionHeading({
 }) {
   return (
     <div className="max-w-3xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
         {eyebrow}
       </p>
       <h2 className="mt-2 text-3xl font-semibold text-zinc-950">

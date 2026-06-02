@@ -188,7 +188,7 @@ function SectionHeading({
 }) {
   return (
     <div className="max-w-3xl">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
         {eyebrow}
       </p>
       <h2 className="mt-2 text-3xl font-semibold text-zinc-950">

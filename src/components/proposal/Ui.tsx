@@ -30,10 +30,10 @@ export function Button({
 }) {
   const variants = {
     primary:
-      "bg-accent text-white hover:bg-emerald-600 focus:ring-emerald-200 disabled:bg-zinc-300",
+      "bg-zinc-900 text-white hover:bg-zinc-800 focus:ring-zinc-200 disabled:bg-zinc-300",
     secondary:
-      "border border-zinc-200 bg-paper text-zinc-950 hover:bg-white focus:ring-emerald-100",
-    ghost: "text-zinc-700 hover:bg-zinc-100 focus:ring-emerald-100",
+      "border border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50 focus:ring-zinc-100",
+    ghost: "text-zinc-700 hover:bg-zinc-100 focus:ring-zinc-100",
     danger:
       "border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 focus:ring-rose-200",
   };
@@ -76,7 +76,7 @@ export function TextInput({
         value={value}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+        className="mt-1 h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100"
       />
       {helper ? <span className="mt-1 block text-xs text-zinc-500">{helper}</span> : null}
     </label>
@@ -107,7 +107,7 @@ export function Textarea({
         rows={rows}
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
+        className="mt-1 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm leading-6 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100"
       />
       {helper ? <span className="mt-1 block text-xs text-zinc-500">{helper}</span> : null}
     </label>
@@ -161,7 +161,7 @@ export function SectionCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           {eyebrow ? (
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
               {eyebrow}
             </p>
           ) : null}
