@@ -604,16 +604,16 @@ function SharingSettings({
             label="Ссылка для кнопки «Согласовать»"
             type="url"
             value={proposal.shareSettings.approveUrl}
-            placeholder="https://example.com/approve"
-            helper="Оставьте пустым, чтобы только фиксировать клик."
+            placeholder="https://calendly.com/your-team/30min"
+            helper="Примеры: https://calendly.com/…, https://t.me/your_team, https://wa.me/79991234567, mailto:hello@isty.ist, tel:+74951234567. Пусто — только фиксируем клик."
             onChange={(approveUrl) => updateShare({ approveUrl })}
           />
           <TextInput
             label="Ссылка для кнопки «Обсудить»"
             type="url"
             value={proposal.shareSettings.discussUrl}
-            placeholder="https://t.me/username"
-            helper="Поддерживаются http(s), mailto, tel и внутренние ссылки."
+            placeholder="https://t.me/your_team"
+            helper="Поддерживаются http(s), mailto, tel. Удобно вести в Telegram, на встречу или в чат поддержки."
             onChange={(discussUrl) => updateShare({ discussUrl })}
           />
         </div>
