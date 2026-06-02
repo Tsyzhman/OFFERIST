@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import {
+  ChevronLeft,
+  ChevronRight,
   Copy,
+  List,
   Eye,
   FilePenLine,
   Link2,
@@ -28,7 +31,13 @@ import { Badge, Button, Toast } from "@/components/proposal/Ui";
 
 type DashboardClientProps = {
   proposals: Proposal[];
+  total: number;
+  limit: number;
+  offset: number;
 };
+
+const DEFAULT_PAGE_LIMIT = 50;
+const SHOW_ALL_LIMIT = 500;
 
 const filters: Array<{ id: ProposalListFilter; label: string }> = [
   { id: "all", label: "Все" },
@@ -40,12 +49,27 @@ const filters: Array<{ id: ProposalListFilter; label: string }> = [
   { id: "rejected", label: "Отклонённые" },
 ];
 
-export function DashboardClient({ proposals }: DashboardClientProps) {
+export function DashboardClient({
+  proposals,
+  total,
+  limit,
+  offset,
+}: DashboardClientProps) {
   const router = useRouter();
-  const [items, setItems] = useState(proposals);
+  const [removedIds, setRemovedIds] = useState<Set<string>>(() => new Set());
   const [filter, setFilter] = useState<ProposalListFilter>("all");
   const [toast, setToast] = useState<ToastState>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const items = useMemo(
+    () => proposals.filter((proposal) => !removedIds.has(proposal.id)),
+    [proposals, removedIds],
+  );
+  const totalItems = Math.max(0, total - removedIds.size);
+  const currentPage = Math.floor(offset / limit) + 1;
+  const shownFrom = items.length > 0 ? offset + 1 : 0;
+  const shownTo = Math.min(offset + items.length, totalItems);
+  const hasPrevious = currentPage > 1;
+  const hasNext = shownTo < totalItems;
 
   const filtered = useMemo(() => {
     if (filter === "all") {
@@ -90,7 +114,6 @@ export function DashboardClient({ proposals }: DashboardClientProps) {
       return;
     }
 
-    setItems((current) => [result.proposal as Proposal, ...current]);
     router.push(`/proposal/${result.proposal.id}/edit`);
   }
 
@@ -109,7 +132,7 @@ export function DashboardClient({ proposals }: DashboardClientProps) {
       return;
     }
 
-    setItems((current) => current.filter((proposal) => proposal.id !== id));
+    setRemovedIds((current) => new Set(current).add(id));
     showToast("success", "КП удалено");
   }
 
@@ -157,6 +180,51 @@ export function DashboardClient({ proposals }: DashboardClientProps) {
                 {item.label}
               </button>
             ))}
+          </div>
+        </section>
+
+        <section className="mt-5 flex flex-col gap-3 rounded-lg border border-white/10 bg-white/5 p-3 text-sm text-paper/80 shadow-sm backdrop-blur md:flex-row md:items-center md:justify-between">
+          <p>
+            Показано {shownFrom}-{shownTo} из {totalItems}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {limit < SHOW_ALL_LIMIT && totalItems > limit ? (
+              <Link
+                href={pageHref(1, Math.min(totalItems, SHOW_ALL_LIMIT))}
+                className="inline-flex items-center gap-2 rounded-md bg-white/10 px-3 py-2 font-semibold text-paper transition hover:bg-white/15 hover:text-white"
+              >
+                <List size={16} aria-hidden="true" />
+                Показать до {Math.min(totalItems, SHOW_ALL_LIMIT)}
+              </Link>
+            ) : null}
+            {hasPrevious ? (
+              <Link
+                href={pageHref(currentPage - 1, limit)}
+                className="inline-flex items-center gap-1 rounded-md bg-white/10 px-3 py-2 font-semibold text-paper transition hover:bg-white/15 hover:text-white"
+              >
+                <ChevronLeft size={16} aria-hidden="true" />
+                Назад
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-3 py-2 font-semibold text-paper/35">
+                <ChevronLeft size={16} aria-hidden="true" />
+                Назад
+              </span>
+            )}
+            {hasNext ? (
+              <Link
+                href={pageHref(currentPage + 1, limit)}
+                className="inline-flex items-center gap-1 rounded-md bg-white/10 px-3 py-2 font-semibold text-paper transition hover:bg-white/15 hover:text-white"
+              >
+                Далее
+                <ChevronRight size={16} aria-hidden="true" />
+              </Link>
+            ) : (
+              <span className="inline-flex items-center gap-1 rounded-md bg-white/5 px-3 py-2 font-semibold text-paper/35">
+                Далее
+                <ChevronRight size={16} aria-hidden="true" />
+              </span>
+            )}
           </div>
         </section>
 
@@ -280,6 +348,21 @@ export function DashboardClient({ proposals }: DashboardClientProps) {
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </main>
   );
+}
+
+function pageHref(page: number, limit: number) {
+  const params = new URLSearchParams();
+
+  if (page > 1) {
+    params.set("page", String(page));
+  }
+
+  if (limit !== DEFAULT_PAGE_LIMIT) {
+    params.set("limit", String(limit));
+  }
+
+  const query = params.toString();
+  return query ? `/?${query}` : "/";
 }
 
 function IconLink({

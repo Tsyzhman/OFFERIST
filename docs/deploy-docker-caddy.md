@@ -8,6 +8,26 @@
 doplist.tsyzhman.ru A <server-ip>
 ```
 
+## Resource profile
+
+Current Docker shape:
+
+- `prisma`: Next.js standalone app on `KP_BUILDER_HOST_PORT` (`3005` by default).
+- `kp-builder-data`: local `.data` volume when Supabase is not configured.
+- Retention/archive work is triggered through the maintenance API endpoint, not a resident Compose worker.
+- Runtime starts with `node server.js` from `.next/standalone`; `npm run start` is not used in the container.
+- Docker logs are capped at 30 MB per service (`json-file`, `10m` x `3`).
+- Password hashes use native Argon2id; Docker installs temporary build tools only in the dependency stage.
+
+Sizing guidance for a polished demo deployment:
+
+- CPU: `0.5-1 vCPU`.
+- RAM: `0.4-0.8 GB`.
+- Docker image: roughly `150-200 MB` after standalone output tracing.
+- Disk: `5-25 GB`, depending on local `.data` use, proposal history, and backups.
+
+If Supabase is used for storage, server disk use is small. Local JSON storage needs regular backup of `kp-builder-data`. On a shared `8 CPU / 12 GB RAM / 120 GB disk` server, this project is safe as a temporary demo next to `fantasy-scout` and `sharovik`; avoid running retention jobs during other heavy builds.
+
 ## 0. Подключиться к серверу
 
 Если входишь под `root`:
@@ -42,9 +62,9 @@ sudo systemctl status caddy --no-pager
 ## 2. Создать папку проекта
 
 ```bash
-sudo mkdir -p /opt/prisma
-sudo chown -R "$USER":"$USER" /opt/prisma
-cd /opt/prisma
+sudo mkdir -p /var/www/kp-builder
+sudo chown -R "$USER":"$USER" /var/www/kp-builder
+cd /var/www/kp-builder
 ```
 
 ## 3. Скачать проект
@@ -103,12 +123,12 @@ cp docker-compose.example.yml docker-compose.yml
 cat docker-compose.yml
 ```
 
-Ожидаемый смысл: контейнер `prisma` слушает внутри `3000`, а наружу на host отдаётся только `127.0.0.1:3007`.
+Ожидаемый смысл: контейнер `kp-builder-web` слушает внутри `3000`, а наружу на host отдаётся только `127.0.0.1:3005`.
 
-Если порт `3007` занят, найти свободный:
+Если порт `3005` занят, найти свободный:
 
 ```bash
-sudo ss -ltnp | grep 3007 || true
+sudo ss -ltnp | grep 3005 || true
 ```
 
 Если занят, открой compose:
@@ -121,7 +141,7 @@ nano docker-compose.yml
 
 ```yaml
 ports:
-  - "127.0.0.1:3007:3000"
+  - "127.0.0.1:3005:3000"
 ```
 
 например на:
@@ -144,7 +164,7 @@ docker compose up -d --build
 ```bash
 docker compose ps
 docker compose logs --tail=100 prisma
-curl -I http://127.0.0.1:3007
+curl -I http://127.0.0.1:3005
 ```
 
 Если порт менял на `3017`, проверка такая:
@@ -181,7 +201,7 @@ doplist.tsyzhman.ru {
     Referrer-Policy strict-origin-when-cross-origin
   }
 
-  reverse_proxy 127.0.0.1:3007
+  reverse_proxy 127.0.0.1:3005
 }
 ```
 
@@ -240,7 +260,7 @@ Caddy не нужно редактировать под каждое новое 
 ## 9. Обновление после нового коммита
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 git pull
 docker compose up -d --build
 docker compose ps
@@ -250,7 +270,7 @@ docker compose logs --tail=100 prisma
 Проверить:
 
 ```bash
-curl -I http://127.0.0.1:3007
+curl -I http://127.0.0.1:3005
 curl -I https://doplist.tsyzhman.ru
 ```
 
@@ -259,7 +279,7 @@ curl -I https://doplist.tsyzhman.ru
 Логи PRISMA:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 docker compose logs -f prisma
 ```
 
@@ -274,21 +294,21 @@ sudo journalctl -u caddy -f
 Перезапустить:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 docker compose restart prisma
 ```
 
 Остановить:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 docker compose down
 ```
 
 Запустить снова:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 docker compose up -d
 ```
 
@@ -305,22 +325,22 @@ docker volume ls | grep prisma
 ```bash
 mkdir -p /opt/backups
 docker run --rm \
-  -v prisma_prisma-data:/data \
+  -v kp-builder-data:/data \
   -v /opt/backups:/backup \
   alpine \
-  tar czf /backup/prisma-data-$(date +%F).tgz -C /data .
+  tar czf /backup/kp-builder-data-$(date +%F).tgz -C /data .
 ```
 
 Восстановить backup:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 docker compose down
 docker run --rm \
-  -v prisma_prisma-data:/data \
+  -v kp-builder-data:/data \
   -v /opt/backups:/backup \
   alpine \
-  sh -c "rm -rf /data/* && tar xzf /backup/prisma-data-YYYY-MM-DD.tgz -C /data"
+  sh -c "rm -rf /data/* && tar xzf /backup/kp-builder-data-YYYY-MM-DD.tgz -C /data"
 docker compose up -d
 ```
 
@@ -338,7 +358,7 @@ docker inspect caddy --format '{{json .NetworkSettings.Networks}}'
 Допустим, сеть называется `caddy`. Тогда открой compose:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 nano docker-compose.yml
 ```
 
@@ -350,7 +370,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: prisma
+    container_name: kp-builder-web
     restart: unless-stopped
     env_file:
       - .env.production
@@ -359,12 +379,12 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: 3000
     volumes:
-      - prisma-data:/app/.data
+      - kp-builder-data:/app/.data
     networks:
       - caddy
 
 volumes:
-  prisma-data:
+  kp-builder-data:
 
 networks:
   caddy:
@@ -377,7 +397,7 @@ networks:
 docker compose up -d --build
 ```
 
-В Caddyfile тогда использовать не `127.0.0.1:3007`, а имя контейнера:
+В Caddyfile тогда использовать не `127.0.0.1:3005`, а имя контейнера:
 
 ```caddyfile
 doplist.tsyzhman.ru {
@@ -395,14 +415,14 @@ doplist.tsyzhman.ru {
 Контейнер не поднялся:
 
 ```bash
-cd /opt/prisma
+cd /var/www/kp-builder
 docker compose logs --tail=200 prisma
 ```
 
 Caddy отдаёт 502:
 
 ```bash
-curl -I http://127.0.0.1:3007
+curl -I http://127.0.0.1:3005
 docker compose ps
 sudo journalctl -u caddy --tail=100 --no-pager
 ```
@@ -410,7 +430,7 @@ sudo journalctl -u caddy --tail=100 --no-pager
 Порт занят:
 
 ```bash
-sudo ss -ltnp | grep 3007
+sudo ss -ltnp | grep 3005
 ```
 
 Не выпускается HTTPS:

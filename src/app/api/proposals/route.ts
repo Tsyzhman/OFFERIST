@@ -7,8 +7,8 @@ import {
 import type { ProposalSavePayload } from "@/lib/types";
 
 export async function GET() {
-  const proposals = await listProposals();
-  return NextResponse.json({ proposals });
+  const { items, total } = await listProposals({ limit: 500 });
+  return NextResponse.json({ proposals: items, total });
 }
 
 export async function POST(request: Request) {

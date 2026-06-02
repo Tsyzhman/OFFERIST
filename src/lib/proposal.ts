@@ -559,6 +559,7 @@ export function normalizeProposal(value: Proposal): Proposal {
     updatedAt: value.updatedAt || now,
     viewsCount: Math.max(0, Number(value.viewsCount) || 0),
     expiresAt,
+    retentionHold: Boolean(value.retentionHold),
     isPasswordProtected: value.isPasswordProtected || shareSettings.accessMode === "password",
     shareSettings,
     assumptions: Array.isArray(value.assumptions) ? value.assumptions : [],

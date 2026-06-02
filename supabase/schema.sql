@@ -17,6 +17,19 @@ begin
 end;
 $$;
 
+create or replace function public.increment_proposal_view(
+  p_id text,
+  p_viewed_at timestamptz
+)
+returns void
+language sql
+as $$
+  update public.proposals
+  set views_count = views_count + 1,
+      last_viewed_at = p_viewed_at
+  where id = p_id;
+$$;
+
 create table if not exists public.proposals (
   id text primary key default gen_random_uuid()::text,
   share_slug text not null unique default public.generate_share_slug(),
@@ -48,6 +61,7 @@ create table if not exists public.proposals (
   last_viewed_at timestamptz,
   views_count integer not null default 0,
   expires_at date not null default current_date + interval '14 days',
+  retention_hold boolean not null default false,
   is_password_protected boolean not null default false,
   password_hash text,
   public_notes text,
@@ -70,6 +84,9 @@ create table if not exists public.proposals (
       (is_password_protected = true and access_mode = 'password' and password_hash is not null)
     )
 );
+
+alter table if exists public.proposals
+  add column if not exists retention_hold boolean not null default false;
 
 drop trigger if exists proposals_set_updated_at on public.proposals;
 create trigger proposals_set_updated_at
@@ -127,10 +144,38 @@ create table if not exists public.proposal_events (
   referrer text
 );
 
+create table if not exists public.proposal_archive_jobs (
+  id text primary key default gen_random_uuid()::text,
+  proposal_original_id text not null unique,
+  status text not null default 'pending'
+    check (status in ('pending', 'sent', 'purged', 'failed')),
+  attempts integer not null default 0,
+  last_error text,
+  telegram_chat_id text,
+  telegram_message_ids integer[] not null default '{}',
+  text_sha256 text,
+  text_chars integer,
+  render_version text not null default 'telegram-v1',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  archived_at timestamptz,
+  purged_at timestamptz
+);
+
+drop trigger if exists proposal_archive_jobs_set_updated_at on public.proposal_archive_jobs;
+create trigger proposal_archive_jobs_set_updated_at
+before update on public.proposal_archive_jobs
+for each row execute function public.set_updated_at();
+
 create index if not exists proposals_share_slug_idx on public.proposals(share_slug);
 create index if not exists proposals_status_idx on public.proposals(status);
+create index if not exists proposals_retention_idx
+  on public.proposals(created_at)
+  where retention_hold = false;
 create index if not exists proposal_events_proposal_id_created_at_idx
   on public.proposal_events(proposal_id, created_at desc);
+create index if not exists proposal_archive_jobs_status_idx
+  on public.proposal_archive_jobs(status);
 
 do $$
 declare

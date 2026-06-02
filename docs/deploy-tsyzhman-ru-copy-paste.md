@@ -8,16 +8,16 @@
 
 ```bash
 ssh root@tsyzhman.ru
-sudo mkdir -p /opt/prisma
-sudo chown -R "$USER":"$USER" /opt/prisma
-cd /opt/prisma
+sudo mkdir -p /var/www/kp-builder
+sudo chown -R "$USER":"$USER" /var/www/kp-builder
+cd /var/www/kp-builder
 git clone https://github.com/Tsyzhman/PRISMA.git .
 cp .env.example .env.production
 SECRET="$(openssl rand -hex 32)"
 sed -i "s/^PROPOSAL_ACCESS_SECRET=.*/PROPOSAL_ACCESS_SECRET=$SECRET/" .env.production
 cp docker-compose.example.yml docker-compose.yml
 docker compose up -d --build
-curl -I http://127.0.0.1:3007
+curl -I http://127.0.0.1:3005
 ```
 
 После этого добавь в `/etc/caddy/Caddyfile`:
@@ -34,7 +34,7 @@ doplist.tsyzhman.ru {
     Referrer-Policy strict-origin-when-cross-origin
   }
 
-  reverse_proxy 127.0.0.1:3007
+  reverse_proxy 127.0.0.1:3005
 }
 ```
 

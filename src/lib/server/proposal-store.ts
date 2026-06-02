@@ -1,7 +1,8 @@
 import { promises as fs } from "fs";
 import path from "path";
-import bcrypt from "bcryptjs";
+import argon2 from "argon2";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { Agent, fetch as undiciFetch } from "undici";
 import {
   createDemoProposal,
   createId,
@@ -13,9 +14,12 @@ import type {
   ProcessStep,
   ProofItem,
   Proposal,
+  ProposalArchiveJob,
+  ProposalArchiveJobStatus,
   ProposalDeliverable,
   ProposalEvent,
   ProposalEventType,
+  ProposalListFilter,
   ProposalPackage,
   ProposalSavePayload,
   ProposalStatus,
@@ -25,6 +29,7 @@ import type {
 type LocalDatabase = {
   proposals: Proposal[];
   events: ProposalEvent[];
+  archiveJobs: ProposalArchiveJob[];
 };
 
 type ProposalRow = {
@@ -57,6 +62,7 @@ type ProposalRow = {
   last_viewed_at: string | null;
   views_count: number;
   expires_at: string;
+  retention_hold: boolean;
   is_password_protected: boolean;
   password_hash: string | null;
   public_notes: string | null;
@@ -123,6 +129,23 @@ type ProposalEventRow = {
   referrer: string | null;
 };
 
+type ProposalArchiveJobRow = {
+  id: string;
+  proposal_original_id: string;
+  status: ProposalArchiveJobStatus;
+  attempts: number;
+  last_error: string | null;
+  telegram_chat_id: string | null;
+  telegram_message_ids: number[] | null;
+  text_sha256: string | null;
+  text_chars: number | null;
+  render_version: string;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  purged_at: string | null;
+};
+
 type ProposalChildren = {
   deliverables: ProposalDeliverable[];
   packages: ProposalPackage[];
@@ -139,23 +162,53 @@ type EventInput = {
   referrer?: string;
 };
 
+type ProposalListOptions = {
+  limit?: number;
+  offset?: number;
+  filter?: ProposalListFilter;
+};
+
+type ProposalListResult = {
+  items: Proposal[];
+  total: number;
+};
+
 const localDatabasePath = path.join(process.cwd(), ".data", "proposals.json");
+const DEFAULT_PROPOSAL_LIST_LIMIT = 50;
+const MAX_PROPOSAL_LIST_LIMIT = 500;
+const MAX_EVENTS_PER_PROPOSAL = 200;
+const MAX_EVENTS_TOTAL = 5000;
+const supabaseAgent = new Agent({
+  keepAliveTimeout: 10_000,
+  keepAliveMaxTimeout: 30_000,
+});
 
 let cachedSupabase: SupabaseClient | null | undefined;
 let supabaseSeedChecked = false;
 
-export async function listProposals() {
+export async function listProposals(
+  options: ProposalListOptions = {},
+): Promise<ProposalListResult> {
+  const limit = normalizeListLimit(options.limit);
+  const offset = Math.max(0, Math.floor(options.offset ?? 0));
+  const filter = options.filter ?? "all";
   const supabase = getSupabase();
 
   if (supabase) {
     await ensureSupabaseDemoData(supabase);
-    return listSupabaseProposals(supabase);
+    return listSupabaseProposalSummaries(supabase, { limit, offset, filter });
   }
 
   const database = await readLocalDatabase();
-  return database.proposals
+  const proposals = database.proposals
     .map(normalizeProposal)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  const filtered = filterProposals(proposals, filter);
+  return {
+    items: filtered.slice(offset, offset + limit),
+    total: filtered.length,
+  };
 }
 
 export async function getProposalById(id: string) {
@@ -239,7 +292,9 @@ export async function saveProposal(
     : "public_link";
 
   if (payload.password?.trim()) {
-    proposal.passwordHash = await bcrypt.hash(payload.password.trim(), 10);
+    proposal.passwordHash = await argon2.hash(payload.password.trim(), {
+      type: argon2.argon2id,
+    });
     proposal.isPasswordProtected = true;
     proposal.shareSettings.accessMode = "password";
   }
@@ -290,6 +345,107 @@ export async function deleteProposal(id: string) {
   database.proposals = database.proposals.filter((proposal) => proposal.id !== id);
   database.events = database.events.filter((event) => event.proposalId !== id);
   await writeLocalDatabase(database);
+}
+
+export async function listRetentionCandidateProposals(
+  cutoffIso: string,
+  limit = 25,
+) {
+  const supabase = getSupabase();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("proposals")
+      .select("*")
+      .lte("created_at", cutoffIso)
+      .eq("retention_hold", false)
+      .order("created_at", { ascending: true })
+      .limit(Math.max(1, limit));
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return hydrateSupabaseProposals(supabase, (data ?? []) as ProposalRow[]);
+  }
+
+  const database = await readLocalDatabase();
+  return database.proposals
+    .map(normalizeProposal)
+    .filter(
+      (proposal) =>
+        !proposal.retentionHold && proposal.createdAt <= cutoffIso,
+    )
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    .slice(0, Math.max(1, limit));
+}
+
+export async function getProposalArchiveJob(proposalOriginalId: string) {
+  const supabase = getSupabase();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("proposal_archive_jobs")
+      .select("*")
+      .eq("proposal_original_id", proposalOriginalId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return data ? fromProposalArchiveJobRow(data as ProposalArchiveJobRow) : null;
+  }
+
+  const database = await readLocalDatabase();
+  return (
+    database.archiveJobs.find(
+      (job) => job.proposalOriginalId === proposalOriginalId,
+    ) ?? null
+  );
+}
+
+export async function saveProposalArchiveJob(job: ProposalArchiveJob) {
+  const now = new Date().toISOString();
+  const nextJob: ProposalArchiveJob = {
+    ...job,
+    id: job.id || createId(),
+    renderVersion: job.renderVersion || "telegram-v1",
+    telegramMessageIds: job.telegramMessageIds ?? [],
+    createdAt: job.createdAt || now,
+    updatedAt: now,
+  };
+  const supabase = getSupabase();
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from("proposal_archive_jobs")
+      .upsert(toProposalArchiveJobRow(nextJob), {
+        onConflict: "proposal_original_id",
+      })
+      .select("*")
+      .single();
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    return fromProposalArchiveJobRow(data as ProposalArchiveJobRow);
+  }
+
+  const database = await readLocalDatabase();
+  const index = database.archiveJobs.findIndex(
+    (item) => item.proposalOriginalId === nextJob.proposalOriginalId,
+  );
+
+  if (index >= 0) {
+    database.archiveJobs[index] = nextJob;
+  } else {
+    database.archiveJobs.unshift(nextJob);
+  }
+
+  await writeLocalDatabase(database);
+  return nextJob;
 }
 
 export async function duplicateProposal(id: string) {
@@ -456,14 +612,16 @@ export async function recordProposalEvent(input: EventInput) {
     }
 
     if (input.eventType === "view") {
-      const proposal = await getSupabaseProposalById(supabase, input.proposalId);
-      await supabase
-        .from("proposals")
-        .update({
-          views_count: (proposal?.viewsCount ?? 0) + 1,
-          last_viewed_at: event.createdAt,
-        })
-        .eq("id", input.proposalId);
+      const { error: viewError } = await supabase.rpc(
+        "increment_proposal_view",
+        {
+          p_id: input.proposalId,
+          p_viewed_at: event.createdAt,
+        },
+      );
+      if (viewError) {
+        throw new Error(viewError.message);
+      }
     }
 
     if (input.eventType === "package_selected" && input.packageId) {
@@ -478,6 +636,7 @@ export async function recordProposalEvent(input: EventInput) {
 
   const database = await readLocalDatabase();
   database.events.unshift(event);
+  database.events = trimEvents(database.events);
   const proposal = database.proposals.find((item) => item.id === input.proposalId);
 
   if (proposal && input.eventType === "view") {
@@ -506,7 +665,7 @@ export async function verifyProposalPassword(
     return null;
   }
 
-  const ok = await bcrypt.compare(password, proposal.passwordHash);
+  const ok = await argon2.verify(proposal.passwordHash, password);
 
   await recordProposalEvent({
     proposalId: proposal.id,
@@ -537,17 +696,98 @@ function cleanShareSlug(value?: string) {
   return (value ?? "").replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 96);
 }
 
-async function listSupabaseProposals(supabase: SupabaseClient) {
-  const { data, error } = await supabase
+function normalizeListLimit(value?: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_PROPOSAL_LIST_LIMIT;
+  }
+
+  return Math.min(
+    MAX_PROPOSAL_LIST_LIMIT,
+    Math.max(1, Math.floor(value)),
+  );
+}
+
+function filterProposals(
+  proposals: Proposal[],
+  filter: ProposalListFilter,
+) {
+  if (filter === "all") {
+    return proposals;
+  }
+
+  return proposals.filter((proposal) => getEffectiveStatus(proposal) === filter);
+}
+
+function trimEvents(events: ProposalEvent[]): ProposalEvent[] {
+  const perProposal = new Map<string, number>();
+  const kept: ProposalEvent[] = [];
+
+  for (const event of events) {
+    const count = perProposal.get(event.proposalId) ?? 0;
+    if (count >= MAX_EVENTS_PER_PROPOSAL) {
+      continue;
+    }
+
+    perProposal.set(event.proposalId, count + 1);
+    kept.push(event);
+
+    if (kept.length >= MAX_EVENTS_TOTAL) {
+      break;
+    }
+  }
+
+  return kept;
+}
+
+async function listSupabaseProposalSummaries(
+  supabase: SupabaseClient,
+  options: Required<ProposalListOptions>,
+): Promise<ProposalListResult> {
+  let query = supabase
     .from("proposals")
-    .select("*")
-    .order("updated_at", { ascending: false });
+    .select("*", { count: "exact" });
+
+  if (options.filter !== "all") {
+    query = query.eq("status", options.filter);
+  }
+
+  const { data, error, count } = await query
+    .order("updated_at", { ascending: false })
+    .range(options.offset, options.offset + options.limit - 1);
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return hydrateSupabaseProposals(supabase, (data ?? []) as ProposalRow[]);
+  const rows = (data ?? []) as ProposalRow[];
+  return {
+    items: await hydrateSupabaseProposalSummaries(supabase, rows),
+    total: count ?? rows.length,
+  };
+}
+
+async function hydrateSupabaseProposalSummaries(
+  supabase: SupabaseClient,
+  rows: ProposalRow[],
+) {
+  const ids = rows.map((row) => row.id);
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const packages = await fetchRows<PackageRow>(supabase, "packages", ids);
+
+  return rows.map((row) =>
+    fromProposalRow(row, {
+      deliverables: [],
+      packages: packages
+        .filter((item) => item.proposal_id === row.id)
+        .map(fromPackageRow),
+      processSteps: [],
+      proofItems: [],
+    }),
+  );
 }
 
 async function getSupabaseProposalById(supabase: SupabaseClient, id: string) {
@@ -744,6 +984,9 @@ async function readLocalDatabase(): Promise<LocalDatabase> {
       return {
         proposals: parsed.proposals.map(normalizeProposal),
         events: Array.isArray(parsed.events) ? parsed.events : [],
+        archiveJobs: Array.isArray(parsed.archiveJobs)
+          ? parsed.archiveJobs.map(normalizeProposalArchiveJob)
+          : [],
       };
     }
   } catch {
@@ -753,6 +996,7 @@ async function readLocalDatabase(): Promise<LocalDatabase> {
   const database: LocalDatabase = {
     proposals: [createDemoProposal()],
     events: [],
+    archiveJobs: [],
   };
   await writeLocalDatabase(database);
   return database;
@@ -760,7 +1004,16 @@ async function readLocalDatabase(): Promise<LocalDatabase> {
 
 async function writeLocalDatabase(database: LocalDatabase) {
   await fs.mkdir(path.dirname(localDatabasePath), { recursive: true });
-  await fs.writeFile(localDatabasePath, JSON.stringify(database, null, 2), "utf8");
+  const tmpPath = `${localDatabasePath}.tmp`;
+  await fs.writeFile(tmpPath, JSON.stringify(database), "utf8");
+  await fs.rename(tmpPath, localDatabasePath);
+}
+
+function supabaseFetch(input: RequestInfo | URL, init?: RequestInit) {
+  return undiciFetch(input as Parameters<typeof undiciFetch>[0], {
+    ...init,
+    dispatcher: supabaseAgent,
+  } as Parameters<typeof undiciFetch>[1]) as unknown as ReturnType<typeof fetch>;
 }
 
 function getSupabase() {
@@ -784,6 +1037,9 @@ function getSupabase() {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    global: {
+      fetch: supabaseFetch as unknown as typeof fetch,
     },
   });
 
@@ -821,6 +1077,7 @@ function fromProposalRow(row: ProposalRow, children: ProposalChildren): Proposal
     lastViewedAt: row.last_viewed_at ?? undefined,
     viewsCount: row.views_count ?? 0,
     expiresAt: row.expires_at,
+    retentionHold: row.retention_hold ?? false,
     isPasswordProtected: row.is_password_protected,
     passwordHash: row.password_hash ?? undefined,
     publicNotes: row.public_notes ?? "",
@@ -876,6 +1133,7 @@ function toProposalRow(proposal: Proposal): ProposalRow {
     last_viewed_at: proposal.lastViewedAt ?? null,
     views_count: proposal.viewsCount,
     expires_at: proposal.expiresAt,
+    retention_hold: Boolean(proposal.retentionHold),
     is_password_protected: proposal.isPasswordProtected,
     password_hash: proposal.passwordHash ?? null,
     public_notes: proposal.publicNotes ?? null,
@@ -1000,5 +1258,75 @@ function toEventRow(event: ProposalEvent): ProposalEventRow {
     created_at: event.createdAt,
     user_agent: event.userAgent ?? null,
     referrer: event.referrer ?? null,
+  };
+}
+
+function normalizeProposalArchiveJob(
+  value: Partial<ProposalArchiveJob>,
+): ProposalArchiveJob {
+  const now = new Date().toISOString();
+
+  return {
+    id: value.id || createId(),
+    proposalOriginalId: value.proposalOriginalId || "",
+    status: value.status || "pending",
+    attempts: Math.max(0, Number(value.attempts) || 0),
+    lastError: value.lastError,
+    telegramChatId: value.telegramChatId,
+    telegramMessageIds: Array.isArray(value.telegramMessageIds)
+      ? value.telegramMessageIds
+      : [],
+    textSha256: value.textSha256,
+    textChars:
+      typeof value.textChars === "number" && Number.isFinite(value.textChars)
+        ? value.textChars
+        : undefined,
+    renderVersion: value.renderVersion || "telegram-v1",
+    createdAt: value.createdAt || now,
+    updatedAt: value.updatedAt || now,
+    archivedAt: value.archivedAt,
+    purgedAt: value.purgedAt,
+  };
+}
+
+function fromProposalArchiveJobRow(
+  row: ProposalArchiveJobRow,
+): ProposalArchiveJob {
+  return normalizeProposalArchiveJob({
+    id: row.id,
+    proposalOriginalId: row.proposal_original_id,
+    status: row.status,
+    attempts: row.attempts,
+    lastError: row.last_error ?? undefined,
+    telegramChatId: row.telegram_chat_id ?? undefined,
+    telegramMessageIds: row.telegram_message_ids ?? [],
+    textSha256: row.text_sha256 ?? undefined,
+    textChars: row.text_chars ?? undefined,
+    renderVersion: row.render_version,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    archivedAt: row.archived_at ?? undefined,
+    purgedAt: row.purged_at ?? undefined,
+  });
+}
+
+function toProposalArchiveJobRow(
+  job: ProposalArchiveJob,
+): ProposalArchiveJobRow {
+  return {
+    id: job.id,
+    proposal_original_id: job.proposalOriginalId,
+    status: job.status,
+    attempts: job.attempts,
+    last_error: job.lastError ?? null,
+    telegram_chat_id: job.telegramChatId ?? null,
+    telegram_message_ids: job.telegramMessageIds,
+    text_sha256: job.textSha256 ?? null,
+    text_chars: job.textChars ?? null,
+    render_version: job.renderVersion,
+    created_at: job.createdAt,
+    updated_at: job.updatedAt,
+    archived_at: job.archivedAt ?? null,
+    purged_at: job.purgedAt ?? null,
   };
 }

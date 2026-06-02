@@ -13,3 +13,11 @@ screenshots
 .env
 .env.*
 
+# Documentation and dev-only files
+docs
+*.md
+supabase
+tsconfig.tsbuildinfo
+eslint.config.mjs
+.github
+.vscode

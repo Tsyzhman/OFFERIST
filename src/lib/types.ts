@@ -82,6 +82,29 @@ export type ProposalEvent = {
   referrer?: string;
 };
 
+export type ProposalArchiveJobStatus =
+  | "pending"
+  | "sent"
+  | "purged"
+  | "failed";
+
+export type ProposalArchiveJob = {
+  id: string;
+  proposalOriginalId: string;
+  status: ProposalArchiveJobStatus;
+  attempts: number;
+  lastError?: string;
+  telegramChatId?: string;
+  telegramMessageIds: number[];
+  textSha256?: string;
+  textChars?: number;
+  renderVersion: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  purgedAt?: string;
+};
+
 export type Proposal = {
   id: string;
   shareSlug: string;
@@ -112,6 +135,7 @@ export type Proposal = {
   lastViewedAt?: string;
   viewsCount: number;
   expiresAt: string;
+  retentionHold?: boolean;
   isPasswordProtected: boolean;
   passwordHash?: string;
   publicNotes?: string;

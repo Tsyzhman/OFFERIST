@@ -9,5 +9,5 @@ doplist.tsyzhman.ru {
     Referrer-Policy strict-origin-when-cross-origin
   }
 
-  reverse_proxy 127.0.0.1:3007
+  reverse_proxy 127.0.0.1:3005
 }

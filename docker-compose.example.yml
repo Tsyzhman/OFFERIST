@@ -1,9 +1,11 @@
+name: kp-builder
+
 services:
   prisma:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: prisma
+    container_name: kp-builder-web
     restart: unless-stopped
     env_file:
       - .env.production
@@ -12,9 +14,19 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: 3000
     ports:
-      - "127.0.0.1:3007:3000"
+      - "127.0.0.1:${KP_BUILDER_HOST_PORT:-3005}:3000"
     volumes:
-      - prisma-data:/app/.data
+      - kp-builder-data:/app/.data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
-  prisma-data:
+  kp-builder-data:
+    name: kp-builder-data
+
+networks:
+  default:
+    name: kp-builder-net

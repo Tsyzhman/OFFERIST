@@ -36,7 +36,7 @@ doplist.tsyzhman.ru {
   @publicProposal path /p/*
   header @publicProposal X-Robots-Tag "noindex, nofollow"
 
-  reverse_proxy 127.0.0.1:3007
+  reverse_proxy 127.0.0.1:3005
 }
 ```
 
