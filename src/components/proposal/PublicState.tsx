@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function PublicState({
   title,
@@ -11,6 +12,7 @@ export function PublicState({
 }) {
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 text-center text-zinc-950">
+      <ThemeToggle className="fixed right-4 top-4 z-10 no-print" />
       <div className="max-w-md rounded-lg border border-zinc-200 bg-white p-8 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-zinc-500">
           PRISMA

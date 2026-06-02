@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 import { LockKeyhole } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button, TextInput, Toast } from "./Ui";
 import type { ToastState } from "@/lib/types";
 
@@ -44,6 +45,7 @@ export function PasswordGate({
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-zinc-50 px-4 text-zinc-950">
+      <ThemeToggle className="fixed right-4 top-4 z-10 no-print" />
       <form
         onSubmit={submit}
         className="w-full max-w-md rounded-lg border border-zinc-200 bg-white p-8 shadow-sm"

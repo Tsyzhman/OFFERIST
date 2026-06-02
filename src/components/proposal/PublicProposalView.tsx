@@ -19,6 +19,7 @@ import {
   getRecommendedPackage,
 } from "@/lib/proposal";
 import type { Proposal, ProposalPackage, ToastState } from "@/lib/types";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge, Button, Toast } from "./Ui";
 
 type PublicProposalViewProps = {
@@ -131,7 +132,8 @@ export function PublicProposalView({
 
   return (
     <article className="min-h-screen bg-paper text-zinc-950">
-      <div className="fixed bottom-5 right-5 z-40 flex flex-wrap gap-2 no-print">
+      <div className="fixed bottom-5 right-5 z-40 flex flex-wrap justify-end gap-2 no-print">
+        <ThemeToggle />
         <Button variant="secondary" onClick={() => window.print()}>
           <Printer size={16} aria-hidden="true" />
           Сохранить PDF

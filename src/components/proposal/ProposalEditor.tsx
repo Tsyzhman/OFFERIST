@@ -2,24 +2,28 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Check,
   Copy,
   ExternalLink,
   Eye,
+  FileUp,
   RefreshCw,
   Save,
   Send,
   ShieldAlert,
+  Sparkles,
   XCircle,
 } from "lucide-react";
 import {
+  createDemoProposal,
   createId,
   formatMoney,
   getEffectiveStatus,
   getPublicUrl,
+  normalizeProposal,
   proposalStatusLabels,
   proposalStatusTone,
   toList,
@@ -34,6 +38,7 @@ import type {
   ProposalStatus,
   ToastState,
 } from "@/lib/types";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Badge, Button, SectionCard, TextInput, Textarea, Toast, Toggle } from "./Ui";
 
 type ProposalEditorProps = {
@@ -59,6 +64,8 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
 
   const isExpired = status === "expired";
 
+  const importInputRef = useRef<HTMLInputElement | null>(null);
+
   function update(patch: Partial<Proposal>) {
     setProposal((current) => ({
       ...current,
@@ -68,6 +75,54 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
         ...(patch.shareSettings ?? {}),
       },
     }));
+  }
+
+  function downloadExampleJson() {
+    const demo = createDemoProposal();
+    const blob = new Blob([JSON.stringify(demo, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "prisma-example.json";
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast("success", "Пример JSON скачан — отдайте коллеге заполнить с AI");
+  }
+
+  async function importFromJsonFile(file: File | undefined) {
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as Partial<Proposal>;
+
+      setProposal((current) =>
+        normalizeProposal({
+          ...current,
+          ...parsed,
+          id: current.id,
+          shareSlug: current.shareSlug,
+          passwordHash: current.passwordHash,
+          shareSettings: {
+            ...current.shareSettings,
+            ...(parsed.shareSettings ?? {}),
+            shareSlug: current.shareSlug,
+          },
+        } as Proposal),
+      );
+
+      showToast("success", "JSON импортирован — проверьте поля и сохраните");
+    } catch {
+      showToast("error", "Не удалось разобрать файл. Проверьте структуру JSON.");
+    } finally {
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
+    }
   }
 
   async function persist(
@@ -250,6 +305,32 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              onClick={downloadExampleJson}
+              title="Скачать пример структуры — отдайте коллеге, чтобы заполнил с AI"
+            >
+              <Sparkles size={16} aria-hidden="true" />
+              Пример JSON
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => importInputRef.current?.click()}
+              title="Импортировать заполненный JSON"
+            >
+              <FileUp size={16} aria-hidden="true" />
+              Импорт
+            </Button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(event) => {
+                void importFromJsonFile(event.target.files?.[0]);
+              }}
+            />
             {currentId ? (
               <Link href={`/proposal/${currentId}/preview`}>
                 <Button variant="secondary">

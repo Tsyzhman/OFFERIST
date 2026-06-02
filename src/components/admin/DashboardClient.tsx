@@ -27,6 +27,7 @@ import {
   proposalStatusTone,
 } from "@/lib/proposal";
 import type { Proposal, ProposalListFilter, ToastState } from "@/lib/types";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { Toast } from "@/components/proposal/Ui";
 
 type DashboardClientProps = {
@@ -159,13 +160,16 @@ export function DashboardClient({
           >
             PRISMA
           </Link>
-          <Link
-            href="/proposal/new"
-            className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-900 px-3.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
-          >
-            <Plus size={16} aria-hidden="true" />
-            Новое КП
-          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Link
+              href="/proposal/new"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-zinc-900 px-3.5 text-sm font-semibold text-white transition hover:bg-zinc-800"
+            >
+              <Plus size={16} aria-hidden="true" />
+              Новое КП
+            </Link>
+          </div>
         </div>
       </header>
 

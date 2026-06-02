@@ -25,20 +25,20 @@ export default async function ProposalPreviewPage({ params }: PageProps) {
 
   return (
     <main>
-      <div className="sticky top-0 z-50 border-b border-white/10 bg-main/90 px-4 py-3 text-paper backdrop-blur no-print">
+      <div className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/90 px-4 py-3 text-white backdrop-blur no-print">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Внутренний preview
             </p>
-            <p className="text-sm text-paper/70">
+            <p className="text-sm text-white/70">
               Так КП будет выглядеть для клиента без админских полей.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
               href="/"
-              className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-4 text-sm font-semibold text-paper hover:bg-white/10"
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white hover:bg-white/10"
             >
               <ArrowLeft size={16} aria-hidden="true" />
               К списку КП
