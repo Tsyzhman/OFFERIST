@@ -13,6 +13,7 @@ import type {
   ProposalData,
   ProposalDeliverable,
   ProposalEventType,
+  ProposalLanguage,
   ProposalPackage,
   ProposalStatus,
   ShareSettings,
@@ -22,7 +23,10 @@ import type {
 
 export const STORAGE_KEY = "change-proposal-builder-v1";
 export const SHARE_HASH_PREFIX = "proposal=";
+export const DEFAULT_LANGUAGE: ProposalLanguage = "ru";
 export const DEFAULT_CURRENCY: ProposalCurrency = "RUB";
+export const proposalLanguages: ProposalLanguage[] = ["ru", "en"];
+export const proposalCurrencies: ProposalCurrency[] = ["RUB", "USD", "EUR"];
 
 const alphabet =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -164,6 +168,18 @@ export function formatMoney(value: number, currency: string = DEFAULT_CURRENCY) 
   }).format(Number.isFinite(value) ? value : 0);
 }
 
+function normalizeProposalLanguage(value: unknown): ProposalLanguage {
+  return proposalLanguages.includes(value as ProposalLanguage)
+    ? (value as ProposalLanguage)
+    : DEFAULT_LANGUAGE;
+}
+
+function normalizeProposalCurrency(value: unknown): ProposalCurrency {
+  return proposalCurrencies.includes(value as ProposalCurrency)
+    ? (value as ProposalCurrency)
+    : DEFAULT_CURRENCY;
+}
+
 export function formatDate(value?: string) {
   if (!value) {
     return "Не указано";
@@ -290,7 +306,7 @@ export function createBlankProposal(): Proposal {
     validUntil,
     version: "v1.0",
     status: "draft",
-    language: "ru",
+    language: DEFAULT_LANGUAGE,
     currency: DEFAULT_CURRENCY,
     shortIntro:
       "Кратко опишите суть предложения, ожидаемый результат и логику выбора решения.",

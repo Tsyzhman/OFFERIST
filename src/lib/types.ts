@@ -6,9 +6,9 @@ export type ProposalStatus =
   | "approved"
   | "rejected";
 
-export type ProposalLanguage = "ru";
+export type ProposalLanguage = "ru" | "en";
 
-export type ProposalCurrency = "RUB";
+export type ProposalCurrency = "RUB" | "USD" | "EUR";
 
 export type ShareAccessMode = "public_link" | "password";
 
@@ -151,8 +151,80 @@ export type Proposal = {
   proofItems: ProofItem[];
 };
 
+export type ProposalAiLanguage = ProposalLanguage;
+
+export type ProposalAiCurrency = ProposalCurrency;
+
+export type ProposalAiDeliverable = {
+  title?: string | null;
+  description?: string | null;
+  clientValue?: string | null;
+  sortOrder?: number | null;
+};
+
+export type ProposalAiPackage = {
+  code?: string | null;
+  name?: string | null;
+  description?: string | null;
+  price?: number | null;
+  durationLabel?: string | null;
+  isRecommended?: boolean | null;
+  features?: string[] | null;
+  sortOrder?: number | null;
+};
+
+export type ProposalAiProcessStep = {
+  title?: string | null;
+  description?: string | null;
+  durationLabel?: string | null;
+  sortOrder?: number | null;
+};
+
+export type ProposalAiProofItem = {
+  title?: string | null;
+  description?: string | null;
+  result?: string | null;
+  sortOrder?: number | null;
+};
+
+export type ProposalAiInput = {
+  title?: string | null;
+  clientName?: string | null;
+  clientCompany?: string | null;
+  preparedBy?: string | null;
+  preparedByRole?: string | null;
+  proposalDate?: string | null;
+  validUntil?: string | null;
+  version?: string | null;
+  language?: ProposalAiLanguage | null;
+  currency?: ProposalAiCurrency | null;
+  shortIntro?: string | null;
+  clientContext?: string | null;
+  clientProblem?: string | null;
+  businessGoal?: string | null;
+  proposedSolutionSummary?: string | null;
+  whyUs?: string | null;
+  paymentTerms?: string | null;
+  legalNotes?: string | null;
+  nextStepText?: string | null;
+  publicNotes?: string | null;
+  selectedPackageCode?: string | null;
+  assumptions?: string[] | null;
+  outOfScope?: string[] | null;
+  deliverables?: ProposalAiDeliverable[] | null;
+  packages?: ProposalAiPackage[] | null;
+  processSteps?: ProposalAiProcessStep[] | null;
+  proofItems?: ProposalAiProofItem[] | null;
+};
+
+export type ProposalAiInputEnvelope = {
+  content: ProposalAiInput;
+  system?: Record<string, unknown>;
+};
+
 export type ProposalSavePayload = {
-  proposal: Proposal;
+  proposal?: Proposal;
+  content?: ProposalAiInput | ProposalAiInputEnvelope;
   password?: string;
 };
 

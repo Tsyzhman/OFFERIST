@@ -4,6 +4,7 @@ import {
   getProposalById,
   saveProposal,
 } from "@/lib/server/proposal-store";
+import { ProposalAiValidationError } from "@/lib/proposal-ai";
 import type { ProposalSavePayload } from "@/lib/types";
 
 type Context = {
@@ -25,15 +26,26 @@ export async function PUT(request: Request, context: Context) {
   const { id } = await context.params;
   const payload = (await request.json()) as ProposalSavePayload;
 
-  if (payload.proposal.id !== id) {
+  if (payload.proposal && payload.proposal.id !== id) {
     return NextResponse.json(
       { error: "Идентификатор КП не совпадает с маршрутом" },
       { status: 400 },
     );
   }
 
-  const proposal = await saveProposal(payload);
-  return NextResponse.json({ proposal });
+  try {
+    const proposal = await saveProposal(payload, false, id);
+    return NextResponse.json({ proposal });
+  } catch (error) {
+    if (error instanceof ProposalAiValidationError) {
+      return NextResponse.json(
+        { error: error.message, issues: error.issues },
+        { status: 400 },
+      );
+    }
+
+    throw error;
+  }
 }
 
 export async function DELETE(_request: Request, context: Context) {

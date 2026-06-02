@@ -18,17 +18,20 @@ import {
   XCircle,
 } from "lucide-react";
 import {
-  createDemoProposal,
   createId,
   formatMoney,
   getEffectiveStatus,
   getPublicUrl,
-  normalizeProposal,
   proposalStatusLabels,
   proposalStatusTone,
   toList,
   fromList,
 } from "@/lib/proposal";
+import {
+  createProposalAiExample,
+  importProposalJson,
+  ProposalAiValidationError,
+} from "@/lib/proposal-ai";
 import type {
   ProcessStep,
   ProofItem,
@@ -78,8 +81,8 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
   }
 
   function downloadExampleJson() {
-    const demo = createDemoProposal();
-    const blob = new Blob([JSON.stringify(demo, null, 2)], {
+    const example = createProposalAiExample();
+    const blob = new Blob([JSON.stringify(example, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -98,26 +101,17 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
 
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as Partial<Proposal>;
+      const parsed = JSON.parse(text) as unknown;
 
-      setProposal((current) =>
-        normalizeProposal({
-          ...current,
-          ...parsed,
-          id: current.id,
-          shareSlug: current.shareSlug,
-          passwordHash: current.passwordHash,
-          shareSettings: {
-            ...current.shareSettings,
-            ...(parsed.shareSettings ?? {}),
-            shareSlug: current.shareSlug,
-          },
-        } as Proposal),
-      );
+      setProposal((current) => importProposalJson(parsed, current));
 
       showToast("success", "JSON импортирован — проверьте поля и сохраните");
-    } catch {
-      showToast("error", "Не удалось разобрать файл. Проверьте структуру JSON.");
+    } catch (error) {
+      const details =
+        error instanceof ProposalAiValidationError
+          ? ` ${error.issues.slice(0, 3).join("; ")}`
+          : "";
+      showToast("error", `Не удалось разобрать файл. Проверьте структуру JSON.${details}`);
     } finally {
       if (importInputRef.current) {
         importInputRef.current.value = "";

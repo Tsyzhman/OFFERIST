@@ -14,7 +14,7 @@ Current Docker shape:
 
 - `prisma`: Next.js standalone app on `KP_BUILDER_HOST_PORT` (`3005` by default).
 - `kp-builder-data`: local `.data` volume when Supabase is not configured.
-- Supabase `proposals` stores CTA redirect fields `approve_url` and `discuss_url`; apply `supabase/schema.sql` before deploying code that uses Supabase storage.
+- Supabase `proposals` stores CTA redirect fields `approve_url` and `discuss_url`, plus language/currency enum checks for `ru/en` and `RUB/USD/EUR`; apply `supabase/schema.sql` before deploying code that uses Supabase storage.
 - Retention/archive work is triggered through the maintenance API endpoint, not a resident Compose worker.
 - Runtime starts with `node server.js` from `.next/standalone`; `npm run start` is not used in the container.
 - Docker logs are capped at 30 MB per service (`json-file`, `10m` x `3`).

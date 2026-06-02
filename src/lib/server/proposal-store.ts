@@ -10,15 +10,18 @@ import {
   getEffectiveStatus,
   normalizeProposal,
 } from "@/lib/proposal";
+import { createProposalFromAiInput } from "@/lib/proposal-ai";
 import type {
   ProcessStep,
   ProofItem,
   Proposal,
   ProposalArchiveJob,
   ProposalArchiveJobStatus,
+  ProposalCurrency,
   ProposalDeliverable,
   ProposalEvent,
   ProposalEventType,
+  ProposalLanguage,
   ProposalListFilter,
   ProposalPackage,
   ProposalSavePayload,
@@ -44,8 +47,8 @@ type ProposalRow = {
   valid_until: string;
   version: string;
   status: ProposalStatus;
-  language: "ru";
-  currency: "RUB";
+  language: ProposalLanguage;
+  currency: ProposalCurrency;
   short_intro: string;
   client_context: string;
   client_problem: string;
@@ -241,28 +244,16 @@ export async function getProposalByShareSlug(shareSlug: string) {
 }
 
 export async function createProposal(payload?: Partial<ProposalSavePayload>) {
-  const proposal = normalizeProposal(
-    payload?.proposal ?? {
-      ...createDemoProposal(),
-      id: createId(),
-      shareSlug: await createUniqueShareSlug(),
-      title: "Новое коммерческое предложение",
-      clientName: "",
-      clientCompany: "",
-      status: "draft",
-      publishedAt: undefined,
-      viewsCount: 0,
-      lastViewedAt: undefined,
-      shareSettings: {
-        ...createDemoProposal().shareSettings,
-        isPublished: false,
-      },
-    },
+  const draft = createNewProposalDraft(
+    await createUniqueShareSlug(payload?.proposal?.shareSlug),
   );
+  const proposal = payload?.content
+    ? createProposalFromAiInput(payload.content, draft)
+    : normalizeProposal(payload?.proposal ?? draft);
 
-  proposal.id = payload?.proposal?.id || createId();
+  proposal.id = payload?.proposal?.id || proposal.id || createId();
   proposal.shareSlug = await createUniqueShareSlug(
-    payload?.proposal?.shareSlug,
+    payload?.proposal?.shareSlug || proposal.shareSlug,
     proposal.id,
   );
   proposal.shareSettings.shareSlug = proposal.shareSlug;
@@ -270,19 +261,65 @@ export async function createProposal(payload?: Partial<ProposalSavePayload>) {
   return saveProposal({ proposal, password: payload?.password }, true);
 }
 
+function createNewProposalDraft(shareSlug: string): Proposal {
+  const demo = createDemoProposal();
+
+  return normalizeProposal({
+    ...demo,
+    id: createId(),
+    shareSlug,
+    title: "Новое коммерческое предложение",
+    clientName: "",
+    clientCompany: "",
+    status: "draft",
+    publishedAt: undefined,
+    viewsCount: 0,
+    lastViewedAt: undefined,
+    shareSettings: {
+      ...demo.shareSettings,
+      isPublished: false,
+      shareSlug,
+    },
+  });
+}
+
 export async function saveProposal(
   payload: ProposalSavePayload,
   isNew = false,
+  proposalId = payload.proposal?.id,
 ) {
-  const existing = isNew ? null : await getProposalById(payload.proposal.id);
+  if (!payload.proposal && !payload.content) {
+    throw new Error("Proposal or content is required");
+  }
+
+  const existing = isNew || !proposalId ? null : await getProposalById(proposalId);
+  let baseProposal =
+    existing ??
+    payload.proposal ??
+    createNewProposalDraft(createShareSlug());
+
+  if (proposalId && baseProposal.id !== proposalId) {
+    baseProposal = { ...baseProposal, id: proposalId };
+  }
+
+  const sourceProposal = payload.content
+    ? createProposalFromAiInput(payload.content, baseProposal)
+    : payload.proposal;
+
+  if (!sourceProposal) {
+    throw new Error("Proposal or content is required");
+  }
+
   const now = new Date().toISOString();
   const proposal = normalizeProposal({
-    ...payload.proposal,
-    createdAt: payload.proposal.createdAt || existing?.createdAt || now,
+    ...sourceProposal,
+    id: sourceProposal.id || proposalId || createId(),
+    shareSlug: sourceProposal.shareSlug || existing?.shareSlug || createShareSlug(),
+    createdAt: sourceProposal.createdAt || existing?.createdAt || now,
     updatedAt: now,
-    viewsCount: existing?.viewsCount ?? payload.proposal.viewsCount ?? 0,
-    lastViewedAt: existing?.lastViewedAt ?? payload.proposal.lastViewedAt,
-    passwordHash: existing?.passwordHash ?? payload.proposal.passwordHash,
+    viewsCount: existing?.viewsCount ?? sourceProposal.viewsCount ?? 0,
+    lastViewedAt: existing?.lastViewedAt ?? sourceProposal.lastViewedAt,
+    passwordHash: existing?.passwordHash ?? sourceProposal.passwordHash,
   });
 
   proposal.shareSlug = await createUniqueShareSlug(proposal.shareSlug, proposal.id);
@@ -1061,8 +1098,8 @@ function fromProposalRow(row: ProposalRow, children: ProposalChildren): Proposal
     validUntil: row.valid_until,
     version: row.version,
     status: row.status,
-    language: "ru",
-    currency: "RUB",
+    language: row.language,
+    currency: row.currency,
     shortIntro: row.short_intro,
     clientContext: row.client_context,
     clientProblem: row.client_problem,
@@ -1119,8 +1156,8 @@ function toProposalRow(proposal: Proposal): ProposalRow {
     valid_until: proposal.validUntil,
     version: proposal.version,
     status: effectiveStatus === "expired" ? proposal.status : effectiveStatus,
-    language: "ru",
-    currency: "RUB",
+    language: proposal.language,
+    currency: proposal.currency,
     short_intro: proposal.shortIntro,
     client_context: proposal.clientContext,
     client_problem: proposal.clientProblem,

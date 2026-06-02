@@ -4,6 +4,7 @@ import {
   duplicateProposal,
   listProposals,
 } from "@/lib/server/proposal-store";
+import { ProposalAiValidationError } from "@/lib/proposal-ai";
 import type { ProposalSavePayload } from "@/lib/types";
 
 export async function GET() {
@@ -29,6 +30,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ proposal });
   }
 
-  const proposal = await createProposal(body as Partial<ProposalSavePayload>);
-  return NextResponse.json({ proposal }, { status: 201 });
+  try {
+    const proposal = await createProposal(body as Partial<ProposalSavePayload>);
+    return NextResponse.json({ proposal }, { status: 201 });
+  } catch (error) {
+    if (error instanceof ProposalAiValidationError) {
+      return NextResponse.json(
+        { error: error.message, issues: error.issues },
+        { status: 400 },
+      );
+    }
+
+    throw error;
+  }
 }

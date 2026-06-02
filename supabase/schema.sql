@@ -43,8 +43,8 @@ create table if not exists public.proposals (
   version text not null default 'v1.0',
   status text not null default 'draft'
     check (status in ('draft', 'published', 'hidden', 'expired', 'approved', 'rejected')),
-  language text not null default 'ru' check (language = 'ru'),
-  currency text not null default 'RUB' check (currency = 'RUB'),
+  language text not null default 'ru' check (language in ('ru', 'en')),
+  currency text not null default 'RUB' check (currency in ('RUB', 'USD', 'EUR')),
   short_intro text not null default '',
   client_context text not null default '',
   client_problem text not null default '',
@@ -93,6 +93,16 @@ alter table if exists public.proposals
 alter table if exists public.proposals
   add column if not exists approve_url text not null default '',
   add column if not exists discuss_url text not null default '';
+
+alter table if exists public.proposals
+  drop constraint if exists proposals_language_check;
+alter table if exists public.proposals
+  add constraint proposals_language_check check (language in ('ru', 'en'));
+
+alter table if exists public.proposals
+  drop constraint if exists proposals_currency_check;
+alter table if exists public.proposals
+  add constraint proposals_currency_check check (currency in ('RUB', 'USD', 'EUR'));
 
 drop trigger if exists proposals_set_updated_at on public.proposals;
 create trigger proposals_set_updated_at
