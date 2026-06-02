@@ -6,10 +6,8 @@ import {
   BadgeCheck,
   CalendarDays,
   CheckCircle2,
-  Download,
   FileSignature,
   MessageCircle,
-  Printer,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
@@ -30,9 +28,7 @@ type PublicProposalViewProps = {
 type CtaAction =
   | "approve"
   | "discuss"
-  | "request_contract"
-  | "download_pdf"
-  | "client_comment";
+  | "request_contract";
 
 export function PublicProposalView({
   proposal,
@@ -42,7 +38,6 @@ export function PublicProposalView({
   const [selectedPackageId, setSelectedPackageId] = useState(
     proposal.selectedPackageId || recommended?.id,
   );
-  const [comment, setComment] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
   const selectedPackage = useMemo(
     () =>
@@ -67,17 +62,12 @@ export function PublicProposalView({
   }
 
   async function handleCta(action: CtaAction) {
-    if (action === "download_pdf") {
-      window.print();
-    }
-
     const targetUrl = getCtaUrl(action);
 
     if (!previewMode) {
       await track("cta_clicked", {
         metadata: {
           action,
-          comment,
           selectedPackageId: selectedPackage?.id,
           selectedPackageName: selectedPackage?.name,
           targetUrl: targetUrl || undefined,
@@ -134,10 +124,6 @@ export function PublicProposalView({
     <article className="min-h-screen bg-paper text-zinc-950">
       <div className="fixed bottom-5 right-5 z-40 flex flex-wrap justify-end gap-2 no-print">
         <ThemeToggle />
-        <Button variant="secondary" onClick={() => window.print()}>
-          <Printer size={16} aria-hidden="true" />
-          Сохранить PDF
-        </Button>
       </div>
 
       <section className="relative overflow-hidden border-b border-zinc-200 bg-white text-zinc-950">
@@ -393,24 +379,6 @@ export function PublicProposalView({
                 {proposal.publicNotes}
               </p>
             ) : null}
-            {proposal.shareSettings.allowClientComment ? (
-              <div className="mt-5">
-                <label className="block">
-                  <span className="text-sm font-semibold text-zinc-700">
-                    Комментарий к КП
-                  </span>
-                  <textarea
-                    value={comment}
-                    onChange={(event) => setComment(event.target.value)}
-                    rows={4}
-                    className="mt-2 w-full rounded-md border border-zinc-200 px-3 py-2 text-sm outline-none focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100"
-                  />
-                </label>
-                <Button className="mt-3" variant="secondary" onClick={() => handleCta("client_comment")}>
-                  Отправить комментарий
-                </Button>
-              </div>
-            ) : null}
           </div>
           <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-5">
             <h3 className="text-lg font-semibold">
@@ -436,10 +404,6 @@ export function PublicProposalView({
               <Button variant="secondary" onClick={() => handleCta("request_contract")}>
                 <FileSignature size={16} aria-hidden="true" />
                 Запросить договор
-              </Button>
-              <Button variant="secondary" onClick={() => handleCta("download_pdf")}>
-                <Download size={16} aria-hidden="true" />
-                Скачать PDF
               </Button>
             </div>
           </div>

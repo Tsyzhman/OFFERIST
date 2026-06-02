@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, FileUp, Link2, Printer, RotateCcw } from "lucide-react";
+import { Download, FileUp, Link2, RotateCcw } from "lucide-react";
 import { useRef } from "react";
 import type { ProposalData } from "@/lib/types";
 
@@ -87,14 +87,6 @@ export function ImportExportControls({
       >
         <Link2 size={16} aria-hidden="true" />
         Копировать ссылку
-      </button>
-      <button
-        type="button"
-        onClick={() => window.print()}
-        className="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
-      >
-        <Printer size={16} aria-hidden="true" />
-        Печать / PDF
       </button>
       <button
         type="button"

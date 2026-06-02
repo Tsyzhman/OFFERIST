@@ -28,9 +28,9 @@
   --ink-soft-muted: #7a8793;
 
   /* borders */
-  --line: #e8edf2;
-  --line-soft: #edf2f6;
-  --line-strong: #cfd6df;
+  --line: #d6dde6;
+  --line-soft: #eaeff5;
+  --line-strong: #b6c1cf;
 
   /* brand accents */
   --brand-purple: #8e44ad;
@@ -41,11 +41,13 @@
   --brand-orange-strong: #b86617;
   --brand-orange-soft: #fdf1e6;
 
-  /* zinc → cool blue-gray ramp (iceberg) */
+  /* zinc → cool blue-gray ramp (iceberg)
+     200/300 deliberately darker than iceberg defaults so card outlines
+     read clearly — early feedback was "borders disappear in light mode". */
   --color-zinc-50:  #fbfcff;
-  --color-zinc-100: #f6f8fb;
-  --color-zinc-200: #edf2f6;
-  --color-zinc-300: #e8edf2;
+  --color-zinc-100: #eef3f8;
+  --color-zinc-200: #d6dde6;
+  --color-zinc-300: #b6c1cf;
   --color-zinc-400: #7a8793;
   --color-zinc-500: #61707d;
   --color-zinc-600: #4f5e6b;
@@ -324,6 +326,35 @@ details > summary::-webkit-details-marker {
   background-color: rgba(247, 249, 252, 0.85);
   backdrop-filter: saturate(140%) blur(10px);
   -webkit-backdrop-filter: saturate(140%) blur(10px);
+}
+
+/* Dark CTA / brand surfaces use bg-zinc-900/950 + text-white in source.
+   In dark theme zinc-900/950 map to LIGHT (text purpose), so the same
+   utility on a background becomes light-on-white. Reassign these
+   utilities to the purple brand surface in dark only. */
+:root[data-theme="dark"] .bg-zinc-900,
+:root[data-theme="dark"] .bg-zinc-950 {
+  background-color: var(--brand-purple);
+  color: var(--brand-purple-on);
+}
+
+:root[data-theme="dark"] .hover\:bg-zinc-800:hover {
+  background-color: var(--brand-purple-strong);
+}
+
+:root[data-theme="dark"] .border-zinc-950 {
+  border-color: var(--brand-purple);
+}
+
+:root[data-theme="dark"] .disabled\:bg-zinc-300:disabled {
+  background-color: rgba(255, 255, 255, 0.10);
+  color: rgba(236, 240, 241, 0.55);
+}
+
+/* In dark theme, bg-zinc-50 cards on top of bg-paper need to stand out;
+   give them a slightly stronger panel tint. */
+:root[data-theme="dark"] .bg-zinc-50 {
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* ---------- Print ---------- */
