@@ -333,7 +333,9 @@ details > summary::-webkit-details-marker {
    utility on a background becomes light-on-white. Reassign these
    utilities to the purple brand surface in dark only. */
 :root[data-theme="dark"] .bg-zinc-900,
-:root[data-theme="dark"] .bg-zinc-950 {
+:root[data-theme="dark"] .bg-zinc-950,
+:root[data-theme="dark"] .bg-zinc-900\/90,
+:root[data-theme="dark"] .bg-zinc-950\/90 {
   background-color: var(--brand-purple);
   color: var(--brand-purple-on);
 }
