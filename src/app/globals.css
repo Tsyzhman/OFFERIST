@@ -9,6 +9,11 @@
 /* ---------- LIGHT (iceberg) ---------- */
 :root,
 :root[data-theme="light"] {
+  --main: #020b14;
+  --accent: #8e44ad;
+  --accent-warm: #e67e22;
+  --paper-light: #ecf0f1;
+
   --background: #f7f9fc;
   --foreground: #0f1923;
 
@@ -107,6 +112,11 @@
 
 /* ---------- DARK (isty.ist) ---------- */
 :root[data-theme="dark"] {
+  --main: #020b14;
+  --accent: #8e44ad;
+  --accent-warm: #e67e22;
+  --paper-light: #ecf0f1;
+
   --background: #020b14;
   --foreground: #ecf0f1;
 
@@ -203,11 +213,13 @@
   --color-paper: var(--surface-paper);
   --color-paper-soft: var(--surface-paper-soft);
 
-  --color-accent: var(--brand-purple);
+  --color-accent: var(--accent);
   --color-accent-soft: var(--brand-purple-soft);
   --color-accent-strong: var(--brand-purple-strong);
   --color-accent-on: var(--brand-purple-on);
-  --color-step: var(--brand-orange);
+  --color-accent-warm: var(--accent-warm);
+  --color-paper-light: var(--paper-light);
+  --color-step: var(--accent-warm);
   --color-step-soft: var(--brand-orange-soft);
   --color-step-strong: var(--brand-orange-strong);
   --color-ink: var(--ink);
@@ -253,6 +265,28 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+@layer components {
+  .glass-card {
+    border: 1px solid var(--line);
+    background: var(--surface-paper);
+    box-shadow: var(--shadow-card);
+  }
+
+  :root[data-theme="dark"] .glass-card {
+    background: var(--surface-panel);
+    backdrop-filter: saturate(140%) blur(14px);
+    -webkit-backdrop-filter: saturate(140%) blur(14px);
+  }
+
+  .card-dark {
+    border: 1px solid rgba(236, 240, 241, 0.16);
+    background: rgba(236, 240, 241, 0.06);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+    backdrop-filter: saturate(140%) blur(16px);
+    -webkit-backdrop-filter: saturate(140%) blur(16px);
+  }
 }
 
 details > summary {

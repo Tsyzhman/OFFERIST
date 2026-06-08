@@ -4,11 +4,14 @@ import {
   createId,
   getTodayDate,
   normalizeProposal,
+  proposalBlockTypes,
 } from "./proposal";
 import type {
   Proposal,
   ProposalAiInput,
   ProposalAiPackage,
+  ProposalBlock,
+  ProposalBlockType,
   ProposalCurrency,
   ProposalLanguage,
   ProposalPackage,
@@ -34,6 +37,7 @@ const aiInputKeys = new Set([
   "paymentTerms",
   "legalNotes",
   "nextStepText",
+  "trustLine",
   "publicNotes",
   "selectedPackageCode",
   "assumptions",
@@ -42,6 +46,7 @@ const aiInputKeys = new Set([
   "packages",
   "processSteps",
   "proofItems",
+  "blocks",
 ]);
 
 const systemManagedKeys = new Set([
@@ -62,8 +67,8 @@ const systemManagedKeys = new Set([
   "internalNotes",
 ]);
 
-const languageValues: ProposalLanguage[] = ["ru", "en"];
-const currencyValues: ProposalCurrency[] = ["RUB", "USD", "EUR"];
+const languageValues: ProposalLanguage[] = ["ru"];
+const currencyValues: ProposalCurrency[] = ["RUB"];
 
 export class ProposalAiValidationError extends Error {
   issues: string[];
@@ -89,8 +94,8 @@ export const proposalAiInputJsonSchema = {
     proposalDate: { type: ["string", "null"], format: "date" },
     validUntil: { type: ["string", "null"], format: "date" },
     version: { type: ["string", "null"] },
-    language: { enum: ["ru", "en", null] },
-    currency: { enum: ["RUB", "USD", "EUR", null] },
+    language: { enum: ["ru", null] },
+    currency: { enum: ["RUB", null] },
     shortIntro: { type: ["string", "null"] },
     clientContext: { type: ["string", "null"] },
     clientProblem: { type: ["string", "null"] },
@@ -100,6 +105,7 @@ export const proposalAiInputJsonSchema = {
     paymentTerms: { type: ["string", "null"] },
     legalNotes: { type: ["string", "null"] },
     nextStepText: { type: ["string", "null"] },
+    trustLine: { type: ["string", "null"] },
     publicNotes: { type: ["string", "null"] },
     selectedPackageCode: {
       type: ["string", "null"],
@@ -129,8 +135,24 @@ export const proposalAiInputJsonSchema = {
       type: ["array", "null"],
       items: { $ref: "#/$defs/proofItem" },
     },
+    blocks: {
+      type: ["array", "null"],
+      items: { $ref: "#/$defs/block" },
+    },
   },
   $defs: {
+    block: {
+      type: "object",
+      additionalProperties: false,
+      required: ["type"],
+      properties: {
+        id: { type: ["string", "null"] },
+        type: { enum: [...proposalBlockTypes] },
+        order: { type: ["integer", "null"] },
+        visible: { type: ["boolean", "null"] },
+        props: { type: ["object", "null"] },
+      },
+    },
     deliverable: {
       type: "object",
       additionalProperties: false,
@@ -214,6 +236,7 @@ export function createProposalAiInputFromProposal(
     paymentTerms: proposal.paymentTerms,
     legalNotes: proposal.legalNotes,
     nextStepText: proposal.nextStepText,
+    trustLine: proposal.trustLine ?? "",
     publicNotes: proposal.publicNotes ?? "",
     selectedPackageCode: selectedPackage
       ? packageCodes.get(selectedPackage.id)
@@ -248,6 +271,7 @@ export function createProposalAiInputFromProposal(
       result: item.result,
       sortOrder: index,
     })),
+    blocks: proposal.blocks,
   };
 }
 
@@ -309,6 +333,7 @@ export function validateProposalAiInputPayload(value: unknown):
     "paymentTerms",
     "legalNotes",
     "nextStepText",
+    "trustLine",
     "publicNotes",
     "selectedPackageCode",
   ]) {
@@ -325,6 +350,7 @@ export function validateProposalAiInputPayload(value: unknown):
   validatePackages(input, issues);
   validateProcessSteps(input, issues);
   validateProofItems(input, issues);
+  validateBlocks(input, issues);
   validateSelectedPackageCode(input, issues);
 
   return issues.length
@@ -370,6 +396,7 @@ export function createProposalFromAiInput(
     paymentTerms: textValue(input.paymentTerms),
     legalNotes: textValue(input.legalNotes),
     nextStepText: textValue(input.nextStepText),
+    trustLine: textValue(input.trustLine),
     publicNotes: textValue(input.publicNotes),
     selectedPackageId,
     expiresAt: baseProposal.expiresAt || baseProposal.validUntil,
@@ -405,6 +432,9 @@ export function createProposalFromAiInput(
         sortOrder: sortOrderValue(item.sortOrder, index),
       })),
     ),
+    blocks: Array.isArray(input.blocks)
+      ? normalizeAiBlocks(input.blocks)
+      : [],
   });
 
   proposal.shareSettings.shareSlug = proposal.shareSlug;
@@ -658,6 +688,35 @@ function validateProofItems(value: Record<string, unknown>, issues: string[]) {
   });
 }
 
+function validateBlocks(value: Record<string, unknown>, issues: string[]) {
+  const items = validateItemArray(
+    value,
+    "blocks",
+    new Set(["id", "type", "order", "visible", "props"]),
+    issues,
+  );
+
+  items.forEach((item, index) => {
+    validateOptionalString(item, "id", issues);
+    validateSortOrder(item, "order", `blocks[${index}]`, issues);
+
+    if (
+      typeof item.type !== "string" ||
+      !proposalBlockTypes.includes(item.type as ProposalBlockType)
+    ) {
+      issues.push(`blocks[${index}].type must be a supported proposal block type`);
+    }
+
+    if (hasValue(item.visible) && typeof item.visible !== "boolean") {
+      issues.push(`blocks[${index}].visible must be a boolean or null`);
+    }
+
+    if (hasValue(item.props) && !isRecord(item.props)) {
+      issues.push(`blocks[${index}].props must be an object or null`);
+    }
+  });
+}
+
 function validateItemArray(
   value: Record<string, unknown>,
   key: string,
@@ -751,6 +810,24 @@ function normalizePackageEntries(packages: ProposalAiInput["packages"]) {
       sortOrder: sortOrderValue(item.sortOrder, index),
     } satisfies ProposalPackage,
   }));
+}
+
+function normalizeAiBlocks(blocks: ProposalAiInput["blocks"]): ProposalBlock[] {
+  return optionalArray(blocks)
+    .map((block, index) => {
+      if (!proposalBlockTypes.includes(block.type)) {
+        return null;
+      }
+
+      return {
+        id: textValue(block.id, `block-${block.type}-${index}`),
+        type: block.type,
+        order: sortOrderValue(block.order, index),
+        visible: block.visible !== false,
+        props: isRecord(block.props) ? block.props : {},
+      } satisfies ProposalBlock;
+    })
+    .filter((block): block is ProposalBlock => Boolean(block));
 }
 
 function createPackageCodeMap(packages: ProposalPackage[]) {

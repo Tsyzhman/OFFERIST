@@ -2,30 +2,43 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  ArrowDown,
+  ArrowUp,
   Check,
   Copy,
   ExternalLink,
   Eye,
+  EyeOff,
   FileUp,
+  GripVertical,
+  Plus,
   RefreshCw,
   Save,
   Send,
   ShieldAlert,
   Sparkles,
+  Trash2,
   XCircle,
 } from "lucide-react";
 import {
+  applyProposalArchetype,
+  checkProposalReadiness,
   createId,
+  DEFAULT_TRUST_LINE,
+  defaultProposalArchetypeId,
   formatMoney,
   getEffectiveStatus,
   getPublicUrl,
+  proposalBlockTypes,
+  proposalArchetypePresets,
   proposalStatusLabels,
   proposalStatusTone,
   toList,
   fromList,
+  type ProposalArchetypeId,
 } from "@/lib/proposal";
 import {
   createProposalAiExample,
@@ -36,9 +49,23 @@ import type {
   ProcessStep,
   ProofItem,
   Proposal,
+  ProposalBlock,
+  ProposalBlockType,
   ProposalDeliverable,
+  ProposalEstimateConfiguratorBlockProps,
+  ProposalEstimateModule,
+  ProposalMediaBlockProps,
+  ProposalMediaItem,
+  ProposalOpenQuestionItem,
+  ProposalOpenQuestionStatus,
   ProposalPackage,
+  ProposalProblemSplitItem,
+  ProposalReadinessWarning,
+  ProposalRoiCalculatorBlockProps,
+  ProposalRoleItem,
   ProposalStatus,
+  ProposalVariantItem,
+  ProposalVariantPickerBlockProps,
   ToastState,
 } from "@/lib/types";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -49,25 +76,163 @@ type ProposalEditorProps = {
   mode: "new" | "edit";
 };
 
+const blockMeta: Record<
+  ProposalBlockType,
+  { label: string; hint: string; editor: string }
+> = {
+  hero: {
+    label: "Hero",
+    hint: "Первый экран: клиент, версия, срок действия, рекомендуемый пакет и главный тезис.",
+    editor: "Основные параметры",
+  },
+  summary: {
+    label: "Краткое резюме",
+    hint: "Три быстрых ответа: задача, цель и предлагаемое решение.",
+    editor: "Контекст и решение",
+  },
+  context: {
+    label: "Контекст клиента",
+    hint: "Исходная ситуация и проблема, из которой рождается предложение.",
+    editor: "Контекст и решение",
+  },
+  solution: {
+    label: "Решение",
+    hint: "Логика подхода и причина, почему он подходит именно этому клиенту.",
+    editor: "Контекст и решение",
+  },
+  deliverables: {
+    label: "Состав работ",
+    hint: "Конкретные результаты и ценность каждого результата для клиента.",
+    editor: "Состав работ",
+  },
+  packages: {
+    label: "Пакеты",
+    hint: "Коммерческие варианты, цены, сроки и состав каждого пакета.",
+    editor: "Пакеты и стоимость",
+  },
+  comparison: {
+    label: "Сравнение пакетов",
+    hint: "Помогает клиенту увидеть компромиссы между вариантами.",
+    editor: "Пакеты и настройки публикации",
+  },
+  timeline: {
+    label: "Сроки и этапы",
+    hint: "Показывает процесс, контрольные точки и ожидаемый ритм работы.",
+    editor: "Сроки и этапы",
+  },
+  whyUs: {
+    label: "Почему это подходит",
+    hint: "Усиливает выбор подхода через аргументы доверия и релевантности.",
+    editor: "Контекст и решение",
+  },
+  proof: {
+    label: "Доказательства",
+    hint: "Кейсы, результаты и опорные аргументы доверия.",
+    editor: "Кейсы / доверие",
+  },
+  assumptions: {
+    label: "Допущения",
+    hint: "Честно фиксирует условия, при которых оценка актуальна.",
+    editor: "Условия оценки",
+  },
+  outOfScope: {
+    label: "За границами",
+    hint: "Снимает риск ложных ожиданий и показывает, что не входит в объём.",
+    editor: "Условия оценки",
+  },
+  terms: {
+    label: "Условия",
+    hint: "Оплата, юридические примечания и коммерческие ограничения.",
+    editor: "Коммерческие условия",
+  },
+  nextStep: {
+    label: "Следующий шаг",
+    hint: "Финальный CTA, выбранный пакет, публичная заметка и микро-доверие.",
+    editor: "Коммерческие условия / публикация",
+  },
+  roles: {
+    label: "Роли",
+    hint: "Матрица ответственности: кто что получает, делает и наблюдает.",
+    editor: "Будущий блок PT05",
+  },
+  problemSplit: {
+    label: "Проблема / последствия",
+    hint: "Две колонки: как сейчас устроен процесс и к чему это приводит.",
+    editor: "Будущий блок PT06",
+  },
+  openQuestions: {
+    label: "Открытые вопросы",
+    hint: "Честная зона неизвестности: факты, допущения и вопросы.",
+    editor: "Будущий блок PT07",
+  },
+  roiCalculator: {
+    label: "Калькулятор экономики",
+    hint: "Сравнение текущих затрат и ожидаемого эффекта после внедрения.",
+    editor: "Будущий блок PT08",
+  },
+  estimateConfigurator: {
+    label: "Конфигуратор сметы",
+    hint: "Модули, зависимости и пересчёт выбранного объёма работ.",
+    editor: "Будущий блок PT09",
+  },
+  variantPicker: {
+    label: "Выбор варианта",
+    hint: "2-4 архитектурных варианта с компромиссами и сравнением.",
+    editor: "Будущий блок PT09",
+  },
+  media: {
+    label: "Медиа",
+    hint: "Скриншоты, схемы и визуальные артефакты как доказательство.",
+    editor: "Будущий блок PT10",
+  },
+};
+
+const openQuestionStatuses: ProposalOpenQuestionStatus[] = [
+  "fact",
+  "assumption",
+  "open",
+];
+
+const openQuestionStatusLabels: Record<ProposalOpenQuestionStatus, string> = {
+  fact: "Факт",
+  assumption: "Допущение",
+  open: "Вопрос",
+};
+
 export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
   const router = useRouter();
   const [proposal, setProposal] = useState(initialProposal);
+  const [selectedArchetypeId, setSelectedArchetypeId] =
+    useState<ProposalArchetypeId>(defaultProposalArchetypeId);
   const [currentId, setCurrentId] = useState(mode === "edit" ? initialProposal.id : null);
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
+  const [origin, setOrigin] = useState("");
   const status = getEffectiveStatus(proposal);
+  const readinessWarnings = useMemo(
+    () => checkProposalReadiness(proposal),
+    [proposal],
+  );
   const publicUrl = useMemo(() => {
-    if (typeof window === "undefined") {
+    if (!origin) {
       return "";
     }
 
-    return getPublicUrl(window.location.origin, proposal.shareSlug);
-  }, [proposal.shareSlug]);
+    return getPublicUrl(origin, proposal.shareSlug);
+  }, [origin, proposal.shareSlug]);
 
   const isExpired = status === "expired";
 
   const importInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      setOrigin(window.location.origin);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   function update(patch: Partial<Proposal>) {
     setProposal((current) => ({
@@ -78,6 +243,11 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
         ...(patch.shareSettings ?? {}),
       },
     }));
+  }
+
+  function selectArchetype(archetypeId: ProposalArchetypeId) {
+    setSelectedArchetypeId(archetypeId);
+    setProposal((current) => applyProposalArchetype(current, archetypeId));
   }
 
   function downloadExampleJson() {
@@ -197,6 +367,21 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
   }
 
   async function publish() {
+    if (readinessWarnings.length) {
+      const confirmed = window.confirm(
+        [
+          "Перед публикацией есть предупреждения по контенту:",
+          ...readinessWarnings.map((warning) => `- ${warning.title}`),
+          "Опубликовать всё равно?",
+        ].join("\n"),
+      );
+
+      if (!confirmed) {
+        showToast("warning", "Публикация отменена. Черновик можно сохранить.");
+        return;
+      }
+    }
+
     const next = {
       ...proposal,
       status: "published" as ProposalStatus,
@@ -353,6 +538,15 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
             </div>
           ) : null}
 
+          <ReadinessWarningsPanel warnings={readinessWarnings} />
+
+          {mode === "new" ? (
+            <ArchetypeSelector
+              selectedId={selectedArchetypeId}
+              onSelect={selectArchetype}
+            />
+          ) : null}
+
           <SectionCard title="Основные параметры" eyebrow="Настройки КП">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <TextInput label="Название КП" value={proposal.title} onChange={(title) => update({ title })} />
@@ -370,6 +564,13 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
               <Textarea label="Краткое вступление" rows={4} value={proposal.shortIntro} onChange={(shortIntro) => update({ shortIntro })} />
             </div>
           </SectionCard>
+
+          <BlockManager
+            proposalId={proposal.id}
+            canUploadMedia={Boolean(currentId)}
+            blocks={proposal.blocks}
+            onChange={(blocks) => update({ blocks })}
+          />
 
           <SectionCard title="Контекст и решение" eyebrow="Содержание КП">
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -500,6 +701,10 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
             <div className="mt-4 space-y-3 text-sm text-zinc-600">
               <SummaryRow label="Пакетов" value={String(proposal.packages.length)} />
               <SummaryRow label="Состав работ" value={String(proposal.deliverables.length)} />
+              <SummaryRow
+                label="Блоки"
+                value={`${proposal.blocks.filter((block) => block.visible).length}/${proposal.blocks.length}`}
+              />
               <SummaryRow label="Просмотры" value={String(proposal.viewsCount)} />
               <SummaryRow
                 label="Рекомендовано"
@@ -515,6 +720,1662 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
       {toast ? <Toast message={toast.message} tone={toast.tone} /> : null}
     </main>
   );
+}
+
+function ArchetypeSelector({
+  selectedId,
+  onSelect,
+}: {
+  selectedId: ProposalArchetypeId;
+  onSelect: (id: ProposalArchetypeId) => void;
+}) {
+  return (
+    <SectionCard title="Архетип КП" eyebrow="Стартовая структура">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+        {proposalArchetypePresets.map((preset) => {
+          const selected = selectedId === preset.id;
+          const visibleBlockLabels = preset.blockTypes
+            .slice(0, 6)
+            .map((type) => blockMeta[type].label)
+            .join(" · ");
+
+          return (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => onSelect(preset.id)}
+              className={`rounded-lg border p-4 text-left transition ${
+                selected
+                  ? "border-accent bg-accent-soft/60 shadow-sm"
+                  : "border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-semibold text-zinc-950">
+                    {preset.name}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-zinc-600">
+                    {preset.description}
+                  </p>
+                </div>
+                <Badge
+                  className={
+                    selected
+                      ? "bg-white text-accent-strong ring-accent/30"
+                      : "bg-zinc-100 text-zinc-600 ring-zinc-200"
+                  }
+                >
+                  {preset.blockTypes.length}
+                </Badge>
+              </div>
+              <p className="mt-3 text-xs font-medium leading-5 text-zinc-500">
+                {visibleBlockLabels}
+                {preset.blockTypes.length > 6 ? " · ..." : ""}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </SectionCard>
+  );
+}
+
+function ReadinessWarningsPanel({
+  warnings,
+}: {
+  warnings: ProposalReadinessWarning[];
+}) {
+  if (!warnings.length) {
+    return (
+      <div className="rounded-lg border border-accent-soft bg-accent-soft/40 p-4 text-sm font-medium text-accent-strong">
+        Контентные проверки пройдены: явных предупреждений перед публикацией нет.
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+      <div className="flex items-start gap-3">
+        <ShieldAlert size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+        <div>
+          <h3 className="font-semibold">Предупреждения перед публикацией</h3>
+          <p className="mt-1 leading-6 text-amber-900">
+            Это мягкие guardrails: они не мешают сохранить черновик, но перед
+            публикацией стоит проверить тон, границы и следующий шаг.
+          </p>
+        </div>
+      </div>
+      <ul className="mt-3 space-y-2">
+        {warnings.map((warning) => (
+          <li key={warning.id} className="rounded-md bg-white/70 p-3">
+            <div className="font-semibold">{warning.title}</div>
+            <div className="mt-1 leading-6 text-amber-900">
+              {warning.message}
+            </div>
+            {warning.reference ? (
+              <div className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-amber-700">
+                {warning.reference}
+              </div>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function BlockManager({
+  proposalId,
+  canUploadMedia,
+  blocks,
+  onChange,
+}: {
+  proposalId: string;
+  canUploadMedia: boolean;
+  blocks: ProposalBlock[];
+  onChange: (blocks: ProposalBlock[]) => void;
+}) {
+  const [selectedType, setSelectedType] =
+    useState<ProposalBlockType>("summary");
+  const orderedBlocks = orderProposalBlocks(blocks);
+  const selectedMeta = blockMeta[selectedType];
+
+  function commit(nextBlocks: ProposalBlock[]) {
+    onChange(reindexBlocks(nextBlocks));
+  }
+
+  function addBlock() {
+    commit([
+      ...orderedBlocks,
+      {
+        id: createId(),
+        type: selectedType,
+        order: orderedBlocks.length,
+        visible: true,
+        props: createDefaultBlockProps(selectedType),
+      },
+    ]);
+  }
+
+  function updateBlock(id: string, patch: Partial<ProposalBlock>) {
+    commit(
+      orderedBlocks.map((block) =>
+        block.id === id ? { ...block, ...patch } : block,
+      ),
+    );
+  }
+
+  function moveBlock(id: string, direction: -1 | 1) {
+    const index = orderedBlocks.findIndex((block) => block.id === id);
+    const targetIndex = index + direction;
+
+    if (index < 0 || targetIndex < 0 || targetIndex >= orderedBlocks.length) {
+      return;
+    }
+
+    const nextBlocks = [...orderedBlocks];
+    [nextBlocks[index], nextBlocks[targetIndex]] = [
+      nextBlocks[targetIndex],
+      nextBlocks[index],
+    ];
+    commit(nextBlocks);
+  }
+
+  function duplicateBlock(block: ProposalBlock) {
+    const index = orderedBlocks.findIndex((item) => item.id === block.id);
+    const nextBlocks = [...orderedBlocks];
+    nextBlocks.splice(index + 1, 0, {
+      ...block,
+      id: createId(),
+      order: index + 1,
+      props: cloneBlockProps(block.props),
+    });
+    commit(nextBlocks);
+  }
+
+  function removeBlock(id: string) {
+    commit(orderedBlocks.filter((block) => block.id !== id));
+  }
+
+  return (
+    <SectionCard
+      title="Блоки КП"
+      eyebrow="Структура страницы"
+      action={
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-96 sm:flex-row">
+          <label className="sr-only" htmlFor="proposal-block-type">
+            Тип блока
+          </label>
+          <select
+            id="proposal-block-type"
+            value={selectedType}
+            onChange={(event) =>
+              setSelectedType(event.target.value as ProposalBlockType)
+            }
+            className="h-10 min-w-0 rounded-md border border-zinc-200 bg-white px-3 text-sm font-medium text-zinc-950 outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100"
+          >
+            {proposalBlockTypes.map((type) => (
+              <option key={type} value={type}>
+                {blockMeta[type].label}
+              </option>
+            ))}
+          </select>
+          <Button onClick={addBlock}>
+            <Plus size={16} aria-hidden="true" />
+            Добавить блок
+          </Button>
+        </div>
+      }
+    >
+      <div className="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm leading-6 text-zinc-600">
+        <span className="font-semibold text-zinc-950">
+          {selectedMeta.label}.
+        </span>{" "}
+        {selectedMeta.hint}
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {orderedBlocks.length ? (
+          orderedBlocks.map((block, index) => {
+            const meta = blockMeta[block.type];
+
+            return (
+              <div
+                key={block.id}
+                className={`rounded-lg border p-4 transition ${
+                  block.visible
+                    ? "border-zinc-200 bg-white"
+                    : "border-zinc-200 bg-zinc-50 opacity-75"
+                }`}
+              >
+                <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
+                  <div className="flex min-w-0 gap-3">
+                    <div className="mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-zinc-500">
+                      <GripVertical size={16} aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-base font-semibold text-zinc-950">
+                          {index + 1}. {meta.label}
+                        </h3>
+                        <Badge
+                          className={
+                            block.visible
+                              ? "bg-accent-soft text-accent-strong ring-accent/20"
+                              : "bg-zinc-100 text-zinc-600 ring-zinc-200"
+                          }
+                        >
+                          {block.visible ? "Виден" : "Скрыт"}
+                        </Badge>
+                        <span className="rounded-md bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-500">
+                          {block.type}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-zinc-600">
+                        {meta.hint}
+                      </p>
+                      <p className="mt-1 text-xs font-medium text-zinc-500">
+                        Редактор: {meta.editor}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <Button
+                      variant="secondary"
+                      className="w-10 px-0"
+                      title="Поднять блок"
+                      aria-label="Поднять блок"
+                      disabled={index === 0}
+                      onClick={() => moveBlock(block.id, -1)}
+                    >
+                      <ArrowUp size={16} aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="w-10 px-0"
+                      title="Опустить блок"
+                      aria-label="Опустить блок"
+                      disabled={index === orderedBlocks.length - 1}
+                      onClick={() => moveBlock(block.id, 1)}
+                    >
+                      <ArrowDown size={16} aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant={block.visible ? "secondary" : "ghost"}
+                      title={block.visible ? "Скрыть блок" : "Показать блок"}
+                      aria-pressed={block.visible}
+                      onClick={() =>
+                        updateBlock(block.id, { visible: !block.visible })
+                      }
+                    >
+                      {block.visible ? (
+                        <Eye size={16} aria-hidden="true" />
+                      ) : (
+                        <EyeOff size={16} aria-hidden="true" />
+                      )}
+                      {block.visible ? "Виден" : "Скрыт"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="w-10 px-0"
+                      title="Дублировать блок"
+                      aria-label="Дублировать блок"
+                      onClick={() => duplicateBlock(block)}
+                    >
+                      <Copy size={16} aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="danger"
+                      className="w-10 px-0"
+                      title="Удалить блок"
+                      aria-label="Удалить блок"
+                      onClick={() => removeBlock(block.id)}
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+
+                {block.type === "roles" ? (
+                  <RolesBlockEditor
+                    block={block}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+
+                {block.type === "problemSplit" ? (
+                  <ProblemSplitBlockEditor
+                    block={block}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+
+                {block.type === "openQuestions" ? (
+                  <OpenQuestionsBlockEditor
+                    block={block}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+
+                {block.type === "roiCalculator" ? (
+                  <RoiCalculatorBlockEditor
+                    block={block}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+
+                {block.type === "estimateConfigurator" ? (
+                  <EstimateConfiguratorBlockEditor
+                    block={block}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+
+                {block.type === "variantPicker" ? (
+                  <VariantPickerBlockEditor
+                    block={block}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+
+                {block.type === "media" ? (
+                  <MediaBlockEditor
+                    block={block}
+                    proposalId={proposalId}
+                    canUpload={canUploadMedia}
+                    onChange={(patch) => updateBlock(block.id, patch)}
+                  />
+                ) : null}
+              </div>
+            );
+          })
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-5 text-sm text-zinc-600">
+            Добавьте первый блок, чтобы собрать структуру КП.
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
+function RolesBlockEditor({
+  block,
+  onChange,
+}: {
+  block: ProposalBlock;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const roles = getRolesFromProps(block.props);
+
+  function commit(nextRoles: ProposalRoleItem[]) {
+    onChange({
+      props: {
+        ...block.props,
+        roles: nextRoles,
+      },
+    });
+  }
+
+  function updateRole(index: number, patch: Partial<ProposalRoleItem>) {
+    commit(
+      roles.map((role, currentIndex) =>
+        currentIndex === index ? { ...role, ...patch } : role,
+      ),
+    );
+  }
+
+  function addRole() {
+    commit([
+      ...roles,
+      {
+        role: "",
+        gets: "",
+        responsibility: "",
+        observability: "",
+      },
+    ]);
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Матрица ролей
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Показывает, что получает каждая сторона и где виден прогресс.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={addRole}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить роль
+        </Button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {roles.length ? (
+          roles.map((role, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <TextInput
+                  label="Роль"
+                  value={role.role}
+                  onChange={(value) => updateRole(index, { role: value })}
+                />
+                <Textarea
+                  label="Что получает"
+                  rows={3}
+                  value={role.gets}
+                  onChange={(value) => updateRole(index, { gets: value })}
+                />
+                <Textarea
+                  label="Ответственность"
+                  rows={3}
+                  value={role.responsibility}
+                  onChange={(value) =>
+                    updateRole(index, { responsibility: value })
+                  }
+                />
+                <Textarea
+                  label="Наблюдаемость"
+                  rows={3}
+                  value={role.observability}
+                  onChange={(value) =>
+                    updateRole(index, { observability: value })
+                  }
+                />
+              </div>
+              <RemoveButton
+                onClick={() =>
+                  commit(roles.filter((_, currentIndex) => currentIndex !== index))
+                }
+              />
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+            Добавьте роль, чтобы блок появился на публичной странице.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ProblemSplitBlockEditor({
+  block,
+  onChange,
+}: {
+  block: ProposalBlock;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const props = getProblemSplitFromProps(block.props);
+
+  function commit(
+    patch: Partial<{
+      asIsTitle: string;
+      consequenceTitle: string;
+      items: ProposalProblemSplitItem[];
+    }>,
+  ) {
+    onChange({
+      props: {
+        ...block.props,
+        ...patch,
+      },
+    });
+  }
+
+  function updateItem(index: number, patch: Partial<ProposalProblemSplitItem>) {
+    commit({
+      items: props.items.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function addItem() {
+    commit({
+      items: [...props.items, { asIs: "", consequence: "" }],
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Как сейчас / последствия
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Усиливает боль через пары текущего процесса и его эффекта.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={addItem}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить пару
+        </Button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <TextInput
+          label="Заголовок левой колонки"
+          value={props.asIsTitle}
+          onChange={(asIsTitle) => commit({ asIsTitle })}
+        />
+        <TextInput
+          label="Заголовок правой колонки"
+          value={props.consequenceTitle}
+          onChange={(consequenceTitle) => commit({ consequenceTitle })}
+        />
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {props.items.length ? (
+          props.items.map((item, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Textarea
+                  label="Как сейчас"
+                  rows={3}
+                  value={item.asIs}
+                  onChange={(asIs) => updateItem(index, { asIs })}
+                />
+                <Textarea
+                  label="К чему приводит"
+                  rows={3}
+                  value={item.consequence}
+                  onChange={(consequence) =>
+                    updateItem(index, { consequence })
+                  }
+                />
+              </div>
+              <RemoveButton
+                onClick={() =>
+                  commit({
+                    items: props.items.filter(
+                      (_, currentIndex) => currentIndex !== index,
+                    ),
+                  })
+                }
+              />
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+            Добавьте пару, чтобы блок появился на публичной странице.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function OpenQuestionsBlockEditor({
+  block,
+  onChange,
+}: {
+  block: ProposalBlock;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const items = getOpenQuestionsFromProps(block.props);
+
+  function commit(nextItems: ProposalOpenQuestionItem[]) {
+    onChange({
+      props: {
+        ...block.props,
+        items: nextItems,
+      },
+    });
+  }
+
+  function updateItem(
+    index: number,
+    patch: Partial<ProposalOpenQuestionItem>,
+  ) {
+    commit(
+      items.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  }
+
+  function addItem(status: ProposalOpenQuestionStatus = "open") {
+    commit([...items, { status, question: "", note: "" }]);
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Факты, допущения и вопросы
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Помогает не маскировать неизвестность под уверенные факты.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={() => addItem()}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить пункт
+        </Button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {items.length ? (
+          items.map((item, index) => (
+            <div
+              key={index}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-[180px_1fr]">
+                <label className="block min-w-0">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Статус
+                  </span>
+                  <select
+                    value={item.status}
+                    onChange={(event) =>
+                      updateItem(index, {
+                        status: event.target.value as ProposalOpenQuestionStatus,
+                      })
+                    }
+                    className="mt-1 h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100"
+                  >
+                    {openQuestionStatuses.map((status) => (
+                      <option key={status} value={status}>
+                        {openQuestionStatusLabels[status]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <TextInput
+                  label="Текст"
+                  value={item.question}
+                  onChange={(question) => updateItem(index, { question })}
+                />
+              </div>
+              <div className="mt-3">
+                <Textarea
+                  label="Заметка"
+                  rows={3}
+                  value={item.note ?? ""}
+                  onChange={(note) => updateItem(index, { note })}
+                />
+              </div>
+              <RemoveButton
+                onClick={() =>
+                  commit(items.filter((_, currentIndex) => currentIndex !== index))
+                }
+              />
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+            Добавьте факт, допущение или вопрос, чтобы блок появился на публичной странице.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RoiCalculatorBlockEditor({
+  block,
+  onChange,
+}: {
+  block: ProposalBlock;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const props = getRoiCalculatorFromProps(block.props);
+
+  function commit(patch: Partial<ProposalRoiCalculatorBlockProps>) {
+    onChange({
+      props: {
+        ...block.props,
+        ...patch,
+      },
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div>
+        <h4 className="text-sm font-semibold text-zinc-950">
+          Калькулятор экономики
+        </h4>
+        <p className="mt-1 text-xs leading-5 text-zinc-500">
+          Клиент сможет менять эти значения на публичной странице и видеть пересчёт.
+        </p>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <TextInput
+          label="Операций в месяц"
+          type="number"
+          value={String(props.operationsPerMonth)}
+          onChange={(value) =>
+            commit({ operationsPerMonth: normalizeNumberInput(value) })
+          }
+        />
+        <TextInput
+          label="Стоимость операции вручную"
+          type="number"
+          value={String(props.manualCostPerOperation)}
+          onChange={(value) =>
+            commit({ manualCostPerOperation: normalizeNumberInput(value) })
+          }
+        />
+        <TextInput
+          label="Доля автоматизации, %"
+          type="number"
+          value={String(props.automationSharePercent)}
+          onChange={(value) =>
+            commit({
+              automationSharePercent: Math.min(
+                100,
+                normalizeNumberInput(value),
+              ),
+            })
+          }
+        />
+        <TextInput
+          label="Стоимость внедрения"
+          type="number"
+          value={String(props.implementationCost ?? 0)}
+          onChange={(value) =>
+            commit({ implementationCost: normalizeNumberInput(value) })
+          }
+        />
+      </div>
+      <div className="mt-3">
+        <Textarea
+          label="Заметка к расчёту"
+          rows={3}
+          value={props.note ?? ""}
+          onChange={(note) => commit({ note })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function EstimateConfiguratorBlockEditor({
+  block,
+  onChange,
+}: {
+  block: ProposalBlock;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const props = getEstimateConfiguratorFromProps(block.props);
+
+  function commit(patch: Partial<ProposalEstimateConfiguratorBlockProps>) {
+    onChange({
+      props: {
+        ...block.props,
+        ...patch,
+      },
+    });
+  }
+
+  function updateModule(index: number, patch: Partial<ProposalEstimateModule>) {
+    commit({
+      modules: props.modules.map((module, currentIndex) =>
+        currentIndex === index ? { ...module, ...patch } : module,
+      ),
+    });
+  }
+
+  function addModule() {
+    commit({
+      modules: [
+        ...props.modules,
+        {
+          id: createId(),
+          name: "",
+          description: "",
+          price: 0,
+          dependsOn: undefined,
+          default: false,
+          defaultSelected: false,
+        },
+      ],
+    });
+  }
+
+  function removeModule(index: number) {
+    const removed = props.modules[index];
+    commit({
+      modules: props.modules
+        .filter((_, currentIndex) => currentIndex !== index)
+        .map((module) =>
+          module.dependsOn === removed?.id
+            ? { ...module, dependsOn: undefined }
+            : module,
+        ),
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Конфигуратор сметы
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Клиент выбирает модули, а публичная страница пересчитывает сумму и
+            подтягивает зависимости.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={addModule}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить модуль
+        </Button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {props.modules.length ? (
+          props.modules.map((module, index) => (
+            <div
+              key={module.id || index}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <TextInput
+                  label="Название модуля"
+                  value={module.name}
+                  onChange={(name) => updateModule(index, { name })}
+                />
+                <TextInput
+                  label="Стоимость"
+                  type="number"
+                  value={String(module.price)}
+                  onChange={(price) =>
+                    updateModule(index, { price: normalizeNumberInput(price) })
+                  }
+                />
+                <Textarea
+                  label="Описание"
+                  rows={3}
+                  value={module.description ?? ""}
+                  onChange={(description) =>
+                    updateModule(index, { description })
+                  }
+                />
+                <label className="block min-w-0">
+                  <span className="text-sm font-medium text-zinc-700">
+                    Зависит от
+                  </span>
+                  <select
+                    value={module.dependsOn ?? ""}
+                    onChange={(event) =>
+                      updateModule(index, {
+                        dependsOn: event.target.value || undefined,
+                      })
+                    }
+                    className="mt-1 h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100"
+                  >
+                    <option value="">Нет зависимости</option>
+                    {props.modules
+                      .filter((item, currentIndex) => currentIndex !== index)
+                      .map((item, optionIndex) => (
+                        <option key={item.id || optionIndex} value={item.id}>
+                          {item.name.trim() || `Модуль ${optionIndex + 1}`}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+              </div>
+              <div className="mt-3">
+                <Toggle
+                  label="Выбран по умолчанию"
+                  checked={Boolean(module.defaultSelected || module.default)}
+                  helper="Модуль будет включён в стартовую сумму на публичной странице."
+                  onChange={(selected) =>
+                    updateModule(index, {
+                      default: selected,
+                      defaultSelected: selected,
+                    })
+                  }
+                />
+              </div>
+              <RemoveButton onClick={() => removeModule(index)} />
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+            Добавьте хотя бы один модуль, чтобы блок появился на публичной
+            странице.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <Textarea
+          label="Заметка к конфигуратору"
+          rows={3}
+          value={props.note ?? ""}
+          onChange={(note) => commit({ note })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function VariantPickerBlockEditor({
+  block,
+  onChange,
+}: {
+  block: ProposalBlock;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const props = getVariantPickerFromProps(block.props);
+  const canAddVariant = props.variants.length < 4;
+
+  function commit(patch: Partial<ProposalVariantPickerBlockProps>) {
+    onChange({
+      props: {
+        ...block.props,
+        ...patch,
+      },
+    });
+  }
+
+  function updateVariant(index: number, patch: Partial<ProposalVariantItem>) {
+    commit({
+      variants: props.variants.map((variant, currentIndex) =>
+        currentIndex === index ? { ...variant, ...patch } : variant,
+      ),
+    });
+  }
+
+  function addVariant() {
+    if (!canAddVariant) {
+      return;
+    }
+
+    commit({
+      variants: [
+        ...props.variants,
+        {
+          id: createId(),
+          name: "",
+          summary: "",
+          price: 0,
+          duration: "",
+          tradeoffs: [],
+          isRecommended: props.variants.length === 0,
+        },
+      ],
+    });
+  }
+
+  function setRecommended(index: number, selected: boolean) {
+    commit({
+      variants: props.variants.map((variant, currentIndex) => ({
+        ...variant,
+        isRecommended:
+          currentIndex === index ? selected : selected ? false : variant.isRecommended,
+      })),
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Выбор архитектурного варианта
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Добавьте от двух до четырёх вариантов, чтобы клиент мог сравнить
+            цену, срок и компромиссы.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={addVariant} disabled={!canAddVariant}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить вариант
+        </Button>
+      </div>
+
+      <div className="mt-4 space-y-3">
+        {props.variants.length ? (
+          props.variants.map((variant, index) => (
+            <div
+              key={variant.id || index}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <TextInput
+                  label="Название варианта"
+                  value={variant.name}
+                  onChange={(name) => updateVariant(index, { name })}
+                />
+                <TextInput
+                  label="Срок"
+                  value={variant.duration ?? ""}
+                  onChange={(duration) => updateVariant(index, { duration })}
+                />
+                <TextInput
+                  label="Бюджет"
+                  type="number"
+                  value={String(variant.price ?? 0)}
+                  onChange={(price) =>
+                    updateVariant(index, { price: normalizeNumberInput(price) })
+                  }
+                />
+                <Textarea
+                  label="Краткое описание"
+                  rows={3}
+                  value={variant.summary}
+                  onChange={(summary) => updateVariant(index, { summary })}
+                />
+              </div>
+              <div className="mt-3">
+                <Textarea
+                  label="Компромиссы"
+                  rows={4}
+                  helper="Каждый пункт с новой строки."
+                  value={fromList(variant.tradeoffs)}
+                  onChange={(value) =>
+                    updateVariant(index, { tradeoffs: toList(value) })
+                  }
+                />
+              </div>
+              <div className="mt-3">
+                <Toggle
+                  label="Рекомендованный вариант"
+                  checked={Boolean(variant.isRecommended)}
+                  helper="На публичной странице этот вариант будет выбран первым."
+                  onChange={(selected) => setRecommended(index, selected)}
+                />
+              </div>
+              <RemoveButton
+                onClick={() =>
+                  commit({
+                    variants: props.variants.filter(
+                      (_, currentIndex) => currentIndex !== index,
+                    ),
+                  })
+                }
+              />
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+            Добавьте минимум два варианта, чтобы блок появился на публичной
+            странице.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <Textarea
+          label="Заметка к вариантам"
+          rows={3}
+          value={props.note ?? ""}
+          onChange={(note) => commit({ note })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MediaBlockEditor({
+  block,
+  proposalId,
+  canUpload,
+  onChange,
+}: {
+  block: ProposalBlock;
+  proposalId: string;
+  canUpload: boolean;
+  onChange: (patch: Partial<ProposalBlock>) => void;
+}) {
+  const props = getMediaBlockFromProps(block.props);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+
+  function commit(patch: Partial<ProposalMediaBlockProps>) {
+    onChange({
+      props: {
+        ...block.props,
+        ...patch,
+      },
+    });
+  }
+
+  function updateItem(index: number, patch: Partial<ProposalMediaItem>) {
+    commit({
+      items: props.items.map((item, currentIndex) =>
+        currentIndex === index ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function addExternalItem() {
+    commit({
+      items: [
+        ...props.items,
+        {
+          id: createId(),
+          url: "",
+          storageProvider: "external",
+          title: "",
+          caption: "",
+          alt: "",
+        },
+      ],
+    });
+  }
+
+  async function uploadFile(file: File) {
+    if (!canUpload) {
+      setError("Сначала сохраните КП, затем загрузите файл.");
+      return;
+    }
+
+    setUploading(true);
+    setError("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(`/api/proposals/${proposalId}/media`, {
+        method: "POST",
+        body: formData,
+      });
+      const result = (await response.json()) as {
+        media?: ProposalMediaItem;
+        error?: string;
+      };
+
+      if (!response.ok || !result.media) {
+        throw new Error(result.error || "Не удалось загрузить файл");
+      }
+
+      commit({
+        items: [
+          ...props.items,
+          {
+            ...result.media,
+            title: "",
+            caption: "",
+            alt: result.media.alt || file.name,
+          },
+        ],
+      });
+    } catch (uploadError) {
+      setError(
+        uploadError instanceof Error
+          ? uploadError.message
+          : "Не удалось загрузить файл",
+      );
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeItem(index: number) {
+    const item = props.items[index];
+
+    if (item?.storageKey && item.storageProvider !== "external") {
+      await fetch(`/api/proposals/${proposalId}/media`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storageKey: item.storageKey,
+          storageProvider: item.storageProvider,
+        }),
+      }).catch(() => undefined);
+    }
+
+    commit({
+      items: props.items.filter((_, currentIndex) => currentIndex !== index),
+    });
+  }
+
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">
+            Медиа и скриншоты
+          </h4>
+          <p className="mt-1 text-xs leading-5 text-zinc-500">
+            Добавляйте только артефакты, которые помогают объяснить решение:
+            скриншоты, схемы, wireframe или визуальное доказательство.
+          </p>
+        </div>
+        <Button variant="secondary" onClick={addExternalItem}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить URL
+        </Button>
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[220px_1fr]">
+        <label className="block min-w-0">
+          <span className="text-sm font-medium text-zinc-700">Режим</span>
+          <select
+            value={props.layout}
+            onChange={(event) =>
+              commit({
+                layout:
+                  event.target.value === "showcase" ? "showcase" : "figure",
+              })
+            }
+            className="mt-1 h-10 w-full rounded-md border border-zinc-200 bg-white px-3 text-sm text-zinc-950 outline-none transition focus:border-zinc-400 focus:ring-4 focus:ring-zinc-100"
+          >
+            <option value="figure">Один скриншот</option>
+            <option value="showcase">Галерея</option>
+          </select>
+        </label>
+
+        <label className="block min-w-0">
+          <span className="text-sm font-medium text-zinc-700">
+            Загрузить изображение
+          </span>
+          <input
+            type="file"
+            accept="image/*"
+            disabled={!canUpload || uploading}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0];
+              event.currentTarget.value = "";
+
+              if (file) {
+                void uploadFile(file);
+              }
+            }}
+            className="mt-1 block w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-950 file:mr-3 file:rounded-md file:border-0 file:bg-zinc-100 file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-60"
+          />
+          <span className="mt-1 block text-xs text-zinc-500">
+            {canUpload
+              ? "PNG/JPG/WebP/GIF до 10 МБ."
+              : "Сначала сохраните КП, затем загрузите файл."}
+          </span>
+        </label>
+      </div>
+
+      {error ? (
+        <div className="mt-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="mt-4 space-y-3">
+        {props.items.length ? (
+          props.items.map((item, index) => (
+            <div
+              key={item.id || index}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <TextInput
+                  label="URL изображения"
+                  value={item.url}
+                  helper={
+                    item.storageProvider === "external"
+                      ? "Можно указать внешний HTTPS URL."
+                      : "Файл загружен в хранилище КП."
+                  }
+                  onChange={(url) => updateItem(index, { url })}
+                />
+                <TextInput
+                  label="Alt"
+                  value={item.alt}
+                  helper="Обязательно: что изображено и зачем это важно."
+                  onChange={(alt) => updateItem(index, { alt })}
+                />
+                <TextInput
+                  label="Заголовок"
+                  value={item.title ?? ""}
+                  onChange={(title) => updateItem(index, { title })}
+                />
+                <Textarea
+                  label="Подпись"
+                  rows={3}
+                  value={item.caption ?? ""}
+                  onChange={(caption) => updateItem(index, { caption })}
+                />
+              </div>
+              <RemoveButton onClick={() => void removeItem(index)} />
+            </div>
+          ))
+        ) : (
+          <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+            Добавьте изображение и заполните alt, чтобы блок появился на
+            публичной странице.
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3">
+        <Textarea
+          label="Заметка к медиа"
+          rows={3}
+          value={props.note ?? ""}
+          onChange={(note) => commit({ note })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function orderProposalBlocks(blocks: ProposalBlock[]) {
+  return blocks
+    .map((block, index) => ({ block, index }))
+    .sort((left, right) => left.block.order - right.block.order || left.index - right.index)
+    .map(({ block }) => block);
+}
+
+function reindexBlocks(blocks: ProposalBlock[]) {
+  return blocks.map((block, index) => ({ ...block, order: index }));
+}
+
+function createDefaultBlockProps(type: ProposalBlockType) {
+  if (type === "roles") {
+    return { roles: [] };
+  }
+
+  if (type === "problemSplit") {
+    return {
+      asIsTitle: "Как сейчас",
+      consequenceTitle: "К чему приводит",
+      items: [],
+    };
+  }
+
+  if (type === "openQuestions") {
+    return { items: [] };
+  }
+
+  if (type === "roiCalculator") {
+    return {
+      operationsPerMonth: 0,
+      manualCostPerOperation: 0,
+      automationSharePercent: 0,
+      implementationCost: 0,
+      note: "",
+    };
+  }
+
+  if (type === "estimateConfigurator") {
+    return {
+      modules: [],
+      note: "",
+    };
+  }
+
+  if (type === "variantPicker") {
+    return {
+      variants: [],
+      note: "",
+    };
+  }
+
+  if (type === "media") {
+    return {
+      layout: "figure",
+      items: [],
+      note: "",
+    };
+  }
+
+  return {};
+}
+
+function cloneBlockProps(props: Record<string, unknown>) {
+  return JSON.parse(JSON.stringify(props)) as Record<string, unknown>;
+}
+
+function getRolesFromProps(props: Record<string, unknown>): ProposalRoleItem[] {
+  const roles = Array.isArray(props.roles) ? props.roles : [];
+
+  return roles.map((role) => {
+    if (!role || typeof role !== "object" || Array.isArray(role)) {
+      return {
+        role: "",
+        gets: "",
+        responsibility: "",
+        observability: "",
+      };
+    }
+
+    return {
+      role: readPropString(role, "role"),
+      gets: readPropString(role, "gets"),
+      responsibility: readPropString(role, "responsibility"),
+      observability: readPropString(role, "observability"),
+    };
+  });
+}
+
+function readPropString(source: object, key: keyof ProposalRoleItem) {
+  const value = (source as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getProblemSplitFromProps(props: Record<string, unknown>): {
+  asIsTitle: string;
+  consequenceTitle: string;
+  items: ProposalProblemSplitItem[];
+} {
+  const items = Array.isArray(props.items) ? props.items : [];
+
+  return {
+    asIsTitle: readStringProp(props, "asIsTitle") || "Как сейчас",
+    consequenceTitle:
+      readStringProp(props, "consequenceTitle") || "К чему приводит",
+    items: items.map((item) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return { asIs: "", consequence: "" };
+      }
+
+      return {
+        asIs: readStringProp(item, "asIs"),
+        consequence: readStringProp(item, "consequence"),
+      };
+    }),
+  };
+}
+
+function readStringProp(source: object, key: string) {
+  const value = (source as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : "";
+}
+
+function getOpenQuestionsFromProps(
+  props: Record<string, unknown>,
+): ProposalOpenQuestionItem[] {
+  const items = Array.isArray(props.items) ? props.items : [];
+
+  return items.map((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return { status: "open", question: "", note: "" };
+    }
+
+    return {
+      status: readOpenQuestionStatus(item),
+      question: readStringProp(item, "question"),
+      note: readStringProp(item, "note"),
+    };
+  });
+}
+
+function readOpenQuestionStatus(source: object): ProposalOpenQuestionStatus {
+  const value = (source as Record<string, unknown>).status;
+  return openQuestionStatuses.includes(value as ProposalOpenQuestionStatus)
+    ? (value as ProposalOpenQuestionStatus)
+    : "open";
+}
+
+function getRoiCalculatorFromProps(
+  props: Record<string, unknown>,
+): ProposalRoiCalculatorBlockProps {
+  return {
+    operationsPerMonth: readNumberProp(props, "operationsPerMonth"),
+    manualCostPerOperation: readNumberProp(props, "manualCostPerOperation"),
+    automationSharePercent: Math.min(
+      100,
+      readNumberProp(props, "automationSharePercent"),
+    ),
+    implementationCost: readNumberProp(props, "implementationCost"),
+    note: readStringProp(props, "note"),
+  };
+}
+
+function getEstimateConfiguratorFromProps(
+  props: Record<string, unknown>,
+): ProposalEstimateConfiguratorBlockProps {
+  const modules = Array.isArray(props.modules) ? props.modules : [];
+
+  return {
+    modules: modules.map((module, index) => {
+      if (!module || typeof module !== "object" || Array.isArray(module)) {
+        return {
+          id: `module-${index + 1}`,
+          name: "",
+          description: "",
+          price: 0,
+          dependsOn: undefined,
+          default: false,
+          defaultSelected: false,
+        };
+      }
+
+      const defaultSelected =
+        readBooleanProp(module, "defaultSelected") ||
+        readBooleanProp(module, "default");
+
+      return {
+        id: readStringProp(module, "id") || `module-${index + 1}`,
+        name: readStringProp(module, "name"),
+        description: readStringProp(module, "description"),
+        price: readNumberProp(module, "price"),
+        dependsOn: readStringProp(module, "dependsOn") || undefined,
+        default: defaultSelected,
+        defaultSelected,
+      };
+    }),
+    note: readStringProp(props, "note"),
+  };
+}
+
+function getVariantPickerFromProps(
+  props: Record<string, unknown>,
+): ProposalVariantPickerBlockProps {
+  const variants = Array.isArray(props.variants) ? props.variants : [];
+
+  return {
+    variants: variants.map((variant, index) => {
+      if (!variant || typeof variant !== "object" || Array.isArray(variant)) {
+        return {
+          id: `variant-${index + 1}`,
+          name: "",
+          summary: "",
+          price: 0,
+          duration: "",
+          tradeoffs: [],
+          isRecommended: false,
+        };
+      }
+
+      return {
+        id: readStringProp(variant, "id") || `variant-${index + 1}`,
+        name: readStringProp(variant, "name"),
+        summary: readStringProp(variant, "summary"),
+        price: readNumberProp(variant, "price"),
+        duration: readStringProp(variant, "duration"),
+        tradeoffs: readStringArrayProp(
+          (variant as Record<string, unknown>).tradeoffs,
+        ),
+        isRecommended: readBooleanProp(variant, "isRecommended"),
+      };
+    }),
+    note: readStringProp(props, "note"),
+  };
+}
+
+function getMediaBlockFromProps(
+  props: Record<string, unknown>,
+): ProposalMediaBlockProps {
+  const items = Array.isArray(props.items) ? props.items : [];
+
+  return {
+    layout: readStringProp(props, "layout") === "showcase" ? "showcase" : "figure",
+    items: items.map((item, index) => {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        return {
+          id: `media-${index + 1}`,
+          url: "",
+          storageProvider: "external",
+          title: "",
+          caption: "",
+          alt: "",
+        };
+      }
+
+      return {
+        id: readStringProp(item, "id") || `media-${index + 1}`,
+        url: readStringProp(item, "url"),
+        storageKey: readStringProp(item, "storageKey") || undefined,
+        storageProvider: readMediaStorageProviderProp(item),
+        title: readStringProp(item, "title"),
+        caption: readStringProp(item, "caption"),
+        alt: readStringProp(item, "alt"),
+      };
+    }),
+    note: readStringProp(props, "note"),
+  };
+}
+
+function normalizeNumberInput(value: string) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+function readNumberProp(source: object, key: string) {
+  const value = (source as Record<string, unknown>)[key];
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? Math.max(0, number) : 0;
+}
+
+function readBooleanProp(source: object, key: string) {
+  return (source as Record<string, unknown>)[key] === true;
+}
+
+function readMediaStorageProviderProp(source: object) {
+  const value = readStringProp(source, "storageProvider");
+
+  return value === "local" || value === "supabase" || value === "external"
+    ? value
+    : "external";
+}
+
+function readStringArrayProp(value: unknown) {
+  const items =
+    typeof value === "string"
+      ? value.split(/\r?\n/)
+      : Array.isArray(value)
+        ? value
+        : [];
+
+  return items
+    .map((item) => (typeof item === "string" ? item.trim() : ""))
+    .filter(Boolean);
 }
 
 function SharingSettings({
@@ -597,6 +2458,13 @@ function SharingSettings({
           />
           <TextInput label="Срок действия ссылки" type="date" value={proposal.expiresAt} onChange={(expiresAt) => onChange({ expiresAt, shareSettings: { ...proposal.shareSettings, expiresAt } })} />
           <TextInput label="Пароль" type="password" value={password} helper={proposal.passwordHash ? "Оставьте пустым, чтобы сохранить текущий пароль." : "Пароль будет сохранён только как hash."} onChange={onPasswordChange} />
+          <TextInput
+            label="Строка микро-доверия"
+            value={proposal.trustLine ?? ""}
+            placeholder={DEFAULT_TRUST_LINE}
+            helper="Показывается под CTA на публичной странице."
+            onChange={(trustLine) => onChange({ trustLine })}
+          />
         </div>
 
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -753,7 +2621,7 @@ function PackagesEditor({
                 onClick={() => setRecommended(item.id)}
                 className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold ${
                   item.isRecommended || selectedPackageId === item.id
-                    ? "bg-emerald-100 text-emerald-800"
+                    ? "bg-accent-soft text-accent-strong"
                     : "bg-white text-zinc-600"
                 }`}
               >

@@ -30,7 +30,7 @@ export function Button({
 }) {
   const variants = {
     primary:
-      "bg-zinc-900 text-white hover:bg-zinc-800 focus:ring-zinc-200 disabled:bg-zinc-300",
+      "bg-accent text-accent-on hover:bg-accent-strong focus:ring-accent-soft disabled:bg-zinc-300",
     secondary:
       "border border-zinc-200 bg-white text-zinc-950 hover:bg-zinc-50 focus:ring-zinc-100",
     ghost: "text-zinc-700 hover:bg-zinc-100 focus:ring-zinc-100",
@@ -131,7 +131,7 @@ export function Toggle({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-1 h-4 w-4 rounded border-zinc-300 text-emerald-600 focus:ring-emerald-500"
+        className="mt-1 h-4 w-4 rounded border-zinc-300 text-accent focus:ring-accent"
       />
       <span>
         <span className="block text-sm font-semibold text-zinc-900">{label}</span>
@@ -176,7 +176,7 @@ export function SectionCard({
 
 export function Toast({ message, tone }: { message: string; tone: string }) {
   const tones = {
-    success: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    success: "border-accent-soft bg-accent-soft text-accent-strong",
     warning: "border-amber-200 bg-amber-50 text-amber-900",
     error: "border-rose-200 bg-rose-50 text-rose-900",
   };

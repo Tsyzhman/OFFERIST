@@ -6,9 +6,9 @@ export type ProposalStatus =
   | "approved"
   | "rejected";
 
-export type ProposalLanguage = "ru" | "en";
+export type ProposalLanguage = "ru";
 
-export type ProposalCurrency = "RUB" | "USD" | "EUR";
+export type ProposalCurrency = "RUB";
 
 export type ShareAccessMode = "public_link" | "password";
 
@@ -16,6 +16,8 @@ export type ProposalEventType =
   | "view"
   | "package_selected"
   | "cta_clicked"
+  | "configuration_changed"
+  | "variant_selected"
   | "password_success"
   | "password_failed";
 
@@ -32,6 +34,134 @@ export type ShareSettings = {
   noIndex: boolean;
   approveUrl: string;
   discussUrl: string;
+};
+
+export type ProposalBlockType =
+  | "hero"
+  | "summary"
+  | "context"
+  | "solution"
+  | "deliverables"
+  | "packages"
+  | "comparison"
+  | "timeline"
+  | "whyUs"
+  | "proof"
+  | "assumptions"
+  | "outOfScope"
+  | "terms"
+  | "nextStep"
+  | "roles"
+  | "problemSplit"
+  | "openQuestions"
+  | "roiCalculator"
+  | "estimateConfigurator"
+  | "variantPicker"
+  | "media";
+
+export type ProposalBlock = {
+  id: string;
+  type: ProposalBlockType;
+  order: number;
+  visible: boolean;
+  props: Record<string, unknown>;
+};
+
+export type ProposalRoleItem = {
+  role: string;
+  gets: string;
+  responsibility: string;
+  observability: string;
+};
+
+export type ProposalRolesBlockProps = {
+  roles: ProposalRoleItem[];
+};
+
+export type ProposalProblemSplitItem = {
+  asIs: string;
+  consequence: string;
+};
+
+export type ProposalProblemSplitBlockProps = {
+  asIsTitle?: string;
+  consequenceTitle?: string;
+  items: ProposalProblemSplitItem[];
+};
+
+export type ProposalOpenQuestionStatus = "fact" | "assumption" | "open";
+
+export type ProposalOpenQuestionItem = {
+  status: ProposalOpenQuestionStatus;
+  question: string;
+  note?: string;
+};
+
+export type ProposalOpenQuestionsBlockProps = {
+  items: ProposalOpenQuestionItem[];
+};
+
+export type ProposalRoiCalculatorBlockProps = {
+  operationsPerMonth: number;
+  manualCostPerOperation: number;
+  automationSharePercent: number;
+  implementationCost?: number;
+  note?: string;
+};
+
+export type ProposalEstimateModule = {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  dependsOn?: string;
+  default?: boolean;
+  defaultSelected?: boolean;
+};
+
+export type ProposalEstimateConfiguratorBlockProps = {
+  modules: ProposalEstimateModule[];
+  note?: string;
+};
+
+export type ProposalVariantItem = {
+  id: string;
+  name: string;
+  summary: string;
+  price?: number;
+  duration?: string;
+  tradeoffs: string[];
+  isRecommended?: boolean;
+};
+
+export type ProposalVariantPickerBlockProps = {
+  variants: ProposalVariantItem[];
+  note?: string;
+};
+
+export type ProposalMediaStorageProvider = "local" | "supabase" | "external";
+
+export type ProposalMediaItem = {
+  id: string;
+  url: string;
+  storageKey?: string;
+  storageProvider?: ProposalMediaStorageProvider;
+  title?: string;
+  caption?: string;
+  alt: string;
+};
+
+export type ProposalMediaBlockProps = {
+  layout?: "figure" | "showcase";
+  items: ProposalMediaItem[];
+  note?: string;
+};
+
+export type ProposalReadinessWarning = {
+  id: string;
+  title: string;
+  message: string;
+  reference?: string;
 };
 
 export type ProposalDeliverable = {
@@ -140,6 +270,7 @@ export type Proposal = {
   retentionHold?: boolean;
   isPasswordProtected: boolean;
   passwordHash?: string;
+  trustLine?: string;
   publicNotes?: string;
   internalNotes?: string;
   shareSettings: ShareSettings;
@@ -149,6 +280,7 @@ export type Proposal = {
   packages: ProposalPackage[];
   processSteps: ProcessStep[];
   proofItems: ProofItem[];
+  blocks: ProposalBlock[];
 };
 
 export type ProposalAiLanguage = ProposalLanguage;
@@ -207,6 +339,7 @@ export type ProposalAiInput = {
   paymentTerms?: string | null;
   legalNotes?: string | null;
   nextStepText?: string | null;
+  trustLine?: string | null;
   publicNotes?: string | null;
   selectedPackageCode?: string | null;
   assumptions?: string[] | null;
@@ -215,6 +348,7 @@ export type ProposalAiInput = {
   packages?: ProposalAiPackage[] | null;
   processSteps?: ProposalAiProcessStep[] | null;
   proofItems?: ProposalAiProofItem[] | null;
+  blocks?: ProposalBlock[] | null;
 };
 
 export type ProposalAiInputEnvelope = {

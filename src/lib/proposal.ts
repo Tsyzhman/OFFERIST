@@ -9,9 +9,12 @@ import type {
   ProcessStep,
   ProofItem,
   Proposal,
+  ProposalBlock,
+  ProposalBlockType,
   ProposalCurrency,
   ProposalData,
   ProposalDeliverable,
+  ProposalReadinessWarning,
   ProposalEventType,
   ProposalLanguage,
   ProposalPackage,
@@ -25,8 +28,180 @@ export const STORAGE_KEY = "change-proposal-builder-v1";
 export const SHARE_HASH_PREFIX = "proposal=";
 export const DEFAULT_LANGUAGE: ProposalLanguage = "ru";
 export const DEFAULT_CURRENCY: ProposalCurrency = "RUB";
-export const proposalLanguages: ProposalLanguage[] = ["ru", "en"];
-export const proposalCurrencies: ProposalCurrency[] = ["RUB", "USD", "EUR"];
+export const DEFAULT_TRUST_LINE =
+  "Self-hosted • Данные остаются у вас • Решение работает без нас";
+export const proposalLanguages: ProposalLanguage[] = ["ru"];
+export const proposalCurrencies: ProposalCurrency[] = ["RUB"];
+export const proposalBlockTypes: ProposalBlockType[] = [
+  "hero",
+  "summary",
+  "context",
+  "solution",
+  "deliverables",
+  "packages",
+  "comparison",
+  "timeline",
+  "whyUs",
+  "proof",
+  "assumptions",
+  "outOfScope",
+  "terms",
+  "nextStep",
+  "roles",
+  "problemSplit",
+  "openQuestions",
+  "roiCalculator",
+  "estimateConfigurator",
+  "variantPicker",
+  "media",
+];
+
+const defaultProposalBlockTypes: ProposalBlockType[] = [
+  "hero",
+  "summary",
+  "context",
+  "solution",
+  "deliverables",
+  "packages",
+  "comparison",
+  "timeline",
+  "whyUs",
+  "proof",
+  "assumptions",
+  "outOfScope",
+  "terms",
+  "nextStep",
+];
+
+export type ProposalArchetypeId =
+  | "operational-contour"
+  | "strategic-project"
+  | "architecture-comparison"
+  | "platform-services"
+  | "fast-launch-package"
+  | "modular-estimate";
+
+export type ProposalArchetypePreset = {
+  id: ProposalArchetypeId;
+  name: string;
+  description: string;
+  blockTypes: ProposalBlockType[];
+};
+
+export const defaultProposalArchetypeId: ProposalArchetypeId =
+  "strategic-project";
+
+export const proposalArchetypePresets: ProposalArchetypePreset[] = [
+  {
+    id: "operational-contour",
+    name: "Операционный контур",
+    description:
+      "Для процессов, где важны роли, этапность, темп внедрения и экономический эффект.",
+    blockTypes: [
+      "hero",
+      "summary",
+      "problemSplit",
+      "roles",
+      "solution",
+      "packages",
+      "roiCalculator",
+      "timeline",
+      "proof",
+      "assumptions",
+      "outOfScope",
+      "terms",
+      "nextStep",
+    ],
+  },
+  {
+    id: "strategic-project",
+    name: "Стратегический проект",
+    description:
+      "Ближе всего к текущему КП: нарратив, решение, состав работ, границы и условия.",
+    blockTypes: defaultProposalBlockTypes,
+  },
+  {
+    id: "architecture-comparison",
+    name: "Сравнение архитектур",
+    description:
+      "Для выбора между вариантами решения: компромиссы, сравнение и экономика.",
+    blockTypes: [
+      "hero",
+      "summary",
+      "context",
+      "problemSplit",
+      "variantPicker",
+      "comparison",
+      "roiCalculator",
+      "deliverables",
+      "packages",
+      "proof",
+      "assumptions",
+      "terms",
+      "nextStep",
+    ],
+  },
+  {
+    id: "platform-services",
+    name: "Пакет сервисов на платформе",
+    description:
+      "Для сервисных пакетов: роли сторон, состав, proof и открытые вопросы.",
+    blockTypes: [
+      "hero",
+      "summary",
+      "roles",
+      "solution",
+      "deliverables",
+      "packages",
+      "proof",
+      "openQuestions",
+      "timeline",
+      "assumptions",
+      "terms",
+      "nextStep",
+    ],
+  },
+  {
+    id: "fast-launch-package",
+    name: "Быстрый запуск",
+    description:
+      "Для пакетного запуска: медиа, сроки, сравнение пакетов и быстрый next step.",
+    blockTypes: [
+      "hero",
+      "summary",
+      "media",
+      "solution",
+      "deliverables",
+      "packages",
+      "timeline",
+      "comparison",
+      "proof",
+      "assumptions",
+      "outOfScope",
+      "terms",
+      "nextStep",
+    ],
+  },
+  {
+    id: "modular-estimate",
+    name: "Модульная смета",
+    description:
+      "Для сборки объёма из модулей: конфигуратор, пакеты, сравнение и границы.",
+    blockTypes: [
+      "hero",
+      "summary",
+      "problemSplit",
+      "estimateConfigurator",
+      "packages",
+      "comparison",
+      "timeline",
+      "assumptions",
+      "outOfScope",
+      "terms",
+      "nextStep",
+    ],
+  },
+];
 
 const alphabet =
   "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -53,6 +228,8 @@ export const eventTypeLabels: Record<ProposalEventType, string> = {
   view: "Просмотр",
   package_selected: "Выбор пакета",
   cta_clicked: "Клик по CTA",
+  configuration_changed: "Сборка конфигурации",
+  variant_selected: "Выбор варианта",
   password_success: "Пароль принят",
   password_failed: "Ошибка пароля",
 };
@@ -277,6 +454,220 @@ export function getRecommendedPackage(proposal: Proposal) {
     proposal.packages.find((item) => item.isRecommended) ??
     proposal.packages[0]
   );
+}
+
+export function checkProposalReadiness(
+  proposal: Proposal,
+): ProposalReadinessWarning[] {
+  const warnings: ProposalReadinessWarning[] = [];
+  const hasScope =
+    hasReadinessText(proposal.proposedSolutionSummary) ||
+    proposal.deliverables.some((item) =>
+      [item.title, item.description, item.clientValue].some(hasReadinessText),
+    ) ||
+    proposal.packages.some((item) =>
+      [item.name, item.description, ...item.features].some(hasReadinessText),
+    );
+
+  if (!hasReadinessText(proposal.nextStepText)) {
+    warnings.push({
+      id: "missing-next-step",
+      title: "Нет следующего шага",
+      message:
+        "Заполните next step, чтобы клиент понимал, что произойдёт после согласования КП.",
+      reference: "NEW_KP_INSTRUCTION §9",
+    });
+  }
+
+  if (hasScope && !proposal.outOfScope.some(hasReadinessText)) {
+    warnings.push({
+      id: "missing-out-of-scope",
+      title: "Не указаны границы",
+      message:
+        "При заполненном объёме работ стоит явно зафиксировать, что не входит в оценку.",
+      reference: "NEW_KP_INSTRUCTION §9",
+    });
+  }
+
+  if (
+    proposal.shareSettings.showPrices &&
+    proposal.packages.some((item) => item.price <= 0)
+  ) {
+    warnings.push({
+      id: "package-price-missing",
+      title: "Есть пакет без цены",
+      message:
+        "Показ цен включён, но один или несколько пакетов имеют нулевую стоимость.",
+      reference: "AGENTS §2",
+    });
+  }
+
+  const hypeMatches = findHypeMatches(collectReadinessText(proposal));
+
+  if (hypeMatches.length) {
+    warnings.push({
+      id: "hype-language",
+      title: "Есть хайповая формулировка",
+      message: `Проверьте тон: ${hypeMatches.join(", ")}. Лучше заменить на проверяемые факты и ограничения.`,
+      reference: "DESIGN_SYSTEM §3",
+    });
+  }
+
+  return warnings;
+}
+
+export function proposalToBlocks(
+  proposal: Proposal,
+  blockTypes: ProposalBlockType[] = defaultProposalBlockTypes,
+): ProposalBlock[] {
+  const idPrefix = proposal.id || "proposal";
+
+  return blockTypes.map((type, index) => ({
+    id: `${idPrefix}-block-${type}`,
+    type,
+    order: index,
+    visible: true,
+    props: {},
+  }));
+}
+
+export function getProposalArchetypePreset(id: ProposalArchetypeId) {
+  return (
+    proposalArchetypePresets.find((preset) => preset.id === id) ??
+    proposalArchetypePresets.find(
+      (preset) => preset.id === defaultProposalArchetypeId,
+    ) ??
+    proposalArchetypePresets[0]
+  );
+}
+
+export function applyProposalArchetype(
+  proposal: Proposal,
+  archetypeId: ProposalArchetypeId,
+): Proposal {
+  const preset = getProposalArchetypePreset(archetypeId);
+
+  return normalizeProposal({
+    ...proposal,
+    blocks: proposalToBlocks(proposal, preset.blockTypes),
+  });
+}
+
+function hasReadinessText(value: unknown): value is string {
+  return typeof value === "string" && Boolean(value.trim());
+}
+
+function collectReadinessText(proposal: Proposal) {
+  const values = [
+    proposal.title,
+    proposal.shortIntro,
+    proposal.clientContext,
+    proposal.clientProblem,
+    proposal.businessGoal,
+    proposal.proposedSolutionSummary,
+    proposal.whyUs,
+    proposal.paymentTerms,
+    proposal.legalNotes,
+    proposal.nextStepText,
+    proposal.publicNotes,
+    ...proposal.assumptions,
+    ...proposal.outOfScope,
+    ...proposal.deliverables.flatMap((item) => [
+      item.title,
+      item.description,
+      item.clientValue,
+    ]),
+    ...proposal.packages.flatMap((item) => [
+      item.name,
+      item.description,
+      item.duration,
+      ...item.features,
+    ]),
+    ...proposal.processSteps.flatMap((item) => [
+      item.title,
+      item.description,
+      item.duration,
+    ]),
+    ...proposal.proofItems.flatMap((item) => [
+      item.title,
+      item.description,
+      item.result,
+    ]),
+    ...proposal.blocks.flatMap((block) => collectUnknownStrings(block.props)),
+  ];
+
+  return values.filter(hasReadinessText);
+}
+
+function collectUnknownStrings(value: unknown): string[] {
+  if (typeof value === "string") {
+    return [value];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap(collectUnknownStrings);
+  }
+
+  if (value && typeof value === "object") {
+    return Object.values(value).flatMap(collectUnknownStrings);
+  }
+
+  return [];
+}
+
+function findHypeMatches(values: string[]) {
+  const text = values.join("\n").toLowerCase();
+  const patterns = [
+    { label: "революционно", pattern: /революционн/ },
+    { label: "уникально", pattern: /уникальн/ },
+    { label: "ИИ всё сделает сам", pattern: /ии\s+вс[её]\s+сделает\s+сам/ },
+    { label: "волшебно", pattern: /волшебн/ },
+  ];
+
+  return patterns
+    .filter((item) => item.pattern.test(text))
+    .map((item) => item.label);
+}
+
+function normalizeProposalBlocks(
+  blocks: ProposalBlock[] | undefined,
+  proposal: Proposal,
+): ProposalBlock[] {
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    return proposalToBlocks(proposal);
+  }
+
+  const normalized = blocks
+    .map((block, index) => normalizeProposalBlock(block, index))
+    .filter((block): block is ProposalBlock => Boolean(block));
+
+  return normalized.length > 0
+    ? normalized.sort((a, b) => a.order - b.order)
+    : proposalToBlocks(proposal);
+}
+
+function normalizeProposalBlock(
+  block: ProposalBlock,
+  index: number,
+): ProposalBlock | null {
+  if (!block || !proposalBlockTypes.includes(block.type)) {
+    return null;
+  }
+
+  return {
+    id:
+      typeof block.id === "string" && block.id.trim()
+        ? block.id.trim()
+        : `block-${block.type}-${index}`,
+    type: block.type,
+    order: Number.isFinite(block.order) ? Math.trunc(block.order) : index,
+    visible: block.visible !== false,
+    props: isRecord(block.props) ? block.props : {},
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export function sanitizePublicProposal(proposal: Proposal): Proposal {
@@ -554,7 +945,11 @@ export function createDemoProposal(): Proposal {
   });
 }
 
-export function normalizeProposal(value: Proposal): Proposal {
+type NormalizableProposal = Omit<Proposal, "blocks"> & {
+  blocks?: ProposalBlock[];
+};
+
+export function normalizeProposal(value: NormalizableProposal): Proposal {
   const shareSlug = value.shareSlug || createShareSlug();
   const validUntil = value.validUntil || value.expiresAt || addDaysDate(14);
   const expiresAt = value.expiresAt || validUntil;
@@ -570,7 +965,7 @@ export function normalizeProposal(value: Proposal): Proposal {
     discussUrl: sanitizeActionUrl(value.shareSettings?.discussUrl),
   };
 
-  return {
+  const normalized: Proposal = {
     ...value,
     id: value.id || createId(),
     shareSlug,
@@ -600,6 +995,7 @@ export function normalizeProposal(value: Proposal): Proposal {
     expiresAt,
     retentionHold: Boolean(value.retentionHold),
     isPasswordProtected: value.isPasswordProtected || shareSettings.accessMode === "password",
+    trustLine: value.trustLine?.trim() || DEFAULT_TRUST_LINE,
     shareSettings,
     assumptions: Array.isArray(value.assumptions) ? value.assumptions : [],
     outOfScope: Array.isArray(value.outOfScope) ? value.outOfScope : [],
@@ -607,6 +1003,12 @@ export function normalizeProposal(value: Proposal): Proposal {
     packages: sortByOrder(value.packages ?? []),
     processSteps: sortByOrder(value.processSteps ?? []),
     proofItems: sortByOrder(value.proofItems ?? []),
+    blocks: [],
+  };
+
+  return {
+    ...normalized,
+    blocks: normalizeProposalBlocks(value.blocks, normalized),
   };
 }
 

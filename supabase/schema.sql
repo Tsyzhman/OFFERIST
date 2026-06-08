@@ -43,8 +43,8 @@ create table if not exists public.proposals (
   version text not null default 'v1.0',
   status text not null default 'draft'
     check (status in ('draft', 'published', 'hidden', 'expired', 'approved', 'rejected')),
-  language text not null default 'ru' check (language in ('ru', 'en')),
-  currency text not null default 'RUB' check (currency in ('RUB', 'USD', 'EUR')),
+  language text not null default 'ru' check (language in ('ru')),
+  currency text not null default 'RUB' check (currency in ('RUB')),
   short_intro text not null default '',
   client_context text not null default '',
   client_problem text not null default '',
@@ -64,6 +64,7 @@ create table if not exists public.proposals (
   retention_hold boolean not null default false,
   is_password_protected boolean not null default false,
   password_hash text,
+  trust_line text not null default 'Self-hosted • Данные остаются у вас • Решение работает без нас',
   public_notes text,
   internal_notes text,
   is_published boolean not null default false,
@@ -79,6 +80,7 @@ create table if not exists public.proposals (
   discuss_url text not null default '',
   assumptions text[] not null default '{}',
   out_of_scope text[] not null default '{}',
+  blocks jsonb not null default '[]'::jsonb,
   constraint password_hash_required
     check (
       (is_password_protected = false and access_mode = 'public_link')
@@ -91,18 +93,24 @@ alter table if exists public.proposals
   add column if not exists retention_hold boolean not null default false;
 
 alter table if exists public.proposals
+  add column if not exists trust_line text not null default 'Self-hosted • Данные остаются у вас • Решение работает без нас';
+
+alter table if exists public.proposals
   add column if not exists approve_url text not null default '',
   add column if not exists discuss_url text not null default '';
 
 alter table if exists public.proposals
+  add column if not exists blocks jsonb not null default '[]'::jsonb;
+
+alter table if exists public.proposals
   drop constraint if exists proposals_language_check;
 alter table if exists public.proposals
-  add constraint proposals_language_check check (language in ('ru', 'en'));
+  add constraint proposals_language_check check (language in ('ru'));
 
 alter table if exists public.proposals
   drop constraint if exists proposals_currency_check;
 alter table if exists public.proposals
-  add constraint proposals_currency_check check (currency in ('RUB', 'USD', 'EUR'));
+  add constraint proposals_currency_check check (currency in ('RUB'));
 
 drop trigger if exists proposals_set_updated_at on public.proposals;
 create trigger proposals_set_updated_at
@@ -152,13 +160,33 @@ create table if not exists public.proposal_events (
   id text primary key default gen_random_uuid()::text,
   proposal_id text not null references public.proposals(id) on delete cascade,
   event_type text not null
-    check (event_type in ('view', 'package_selected', 'cta_clicked', 'password_success', 'password_failed')),
+    check (event_type in ('view', 'package_selected', 'cta_clicked', 'configuration_changed', 'variant_selected', 'password_success', 'password_failed')),
   package_id text,
   metadata jsonb,
   created_at timestamptz not null default now(),
   user_agent text,
   referrer text
 );
+
+alter table if exists public.proposal_events
+  drop constraint if exists proposal_events_event_type_check;
+alter table if exists public.proposal_events
+  add constraint proposal_events_event_type_check
+  check (event_type in ('view', 'package_selected', 'cta_clicked', 'configuration_changed', 'variant_selected', 'password_success', 'password_failed'));
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'proposal-media',
+  'proposal-media',
+  true,
+  10485760,
+  array['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml']
+)
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 create table if not exists public.proposal_archive_jobs (
   id text primary key default gen_random_uuid()::text,

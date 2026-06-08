@@ -15,6 +15,7 @@ import type {
   ProcessStep,
   ProofItem,
   Proposal,
+  ProposalBlock,
   ProposalArchiveJob,
   ProposalArchiveJobStatus,
   ProposalCurrency,
@@ -23,6 +24,7 @@ import type {
   ProposalEventType,
   ProposalLanguage,
   ProposalListFilter,
+  ProposalMediaItem,
   ProposalPackage,
   ProposalSavePayload,
   ProposalStatus,
@@ -68,6 +70,7 @@ type ProposalRow = {
   retention_hold: boolean;
   is_password_protected: boolean;
   password_hash: string | null;
+  trust_line: string | null;
   public_notes: string | null;
   internal_notes: string | null;
   is_published: boolean;
@@ -82,6 +85,7 @@ type ProposalRow = {
   discuss_url: string | null;
   assumptions: string[] | null;
   out_of_scope: string[] | null;
+  blocks: ProposalBlock[] | null;
 };
 
 type DeliverableRow = {
@@ -179,10 +183,14 @@ type ProposalListResult = {
 };
 
 const localDatabasePath = path.join(process.cwd(), ".data", "proposals.json");
+const localMediaPath = path.join(process.cwd(), ".data", "proposal-media");
 const DEFAULT_PROPOSAL_LIST_LIMIT = 50;
 const MAX_PROPOSAL_LIST_LIMIT = 500;
 const MAX_EVENTS_PER_PROPOSAL = 200;
 const MAX_EVENTS_TOTAL = 5000;
+const MAX_PROPOSAL_MEDIA_BYTES = 10 * 1024 * 1024;
+const PROPOSAL_MEDIA_BUCKET =
+  process.env.PROPOSAL_MEDIA_BUCKET || "proposal-media";
 const supabaseAgent = new Agent({
   keepAliveTimeout: 10_000,
   keepAliveMaxTimeout: 30_000,
@@ -371,6 +379,7 @@ export async function deleteProposal(id: string) {
   const supabase = getSupabase();
 
   if (supabase) {
+    await deleteProposalMediaFiles(id);
     await supabase.from("proposal_events").delete().eq("proposal_id", id);
     await deleteSupabaseChildren(supabase, id);
     const { error } = await supabase.from("proposals").delete().eq("id", id);
@@ -383,7 +392,130 @@ export async function deleteProposal(id: string) {
   const database = await readLocalDatabase();
   database.proposals = database.proposals.filter((proposal) => proposal.id !== id);
   database.events = database.events.filter((event) => event.proposalId !== id);
+  await deleteProposalMediaFiles(id);
   await writeLocalDatabase(database);
+}
+
+export async function saveProposalMediaFile(input: {
+  proposalId: string;
+  fileName: string;
+  contentType: string;
+  bytes: Uint8Array;
+}): Promise<ProposalMediaItem> {
+  if (!input.contentType.startsWith("image/")) {
+    throw new Error("Only image files can be attached to a proposal");
+  }
+
+  if (input.bytes.byteLength > MAX_PROPOSAL_MEDIA_BYTES) {
+    throw new Error("Proposal media file is too large");
+  }
+
+  const mediaId = createId();
+  const safeName = sanitizeMediaFileName(input.fileName, input.contentType);
+  const fileName = `${mediaId}-${safeName}`;
+  const storageKey = `${input.proposalId}/${fileName}`;
+  const supabase = getSupabase();
+
+  if (supabase) {
+    await ensureProposalMediaBucket(supabase);
+    const { error } = await supabase.storage
+      .from(PROPOSAL_MEDIA_BUCKET)
+      .upload(storageKey, Buffer.from(input.bytes), {
+        contentType: input.contentType,
+        upsert: false,
+      });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    const { data } = supabase.storage
+      .from(PROPOSAL_MEDIA_BUCKET)
+      .getPublicUrl(storageKey);
+
+    return {
+      id: mediaId,
+      url: data.publicUrl,
+      storageKey,
+      storageProvider: "supabase",
+      alt: stripFileExtension(safeName),
+    };
+  }
+
+  const targetPath = getLocalMediaPath([input.proposalId, fileName]);
+  await fs.mkdir(path.dirname(targetPath), { recursive: true });
+  await fs.writeFile(targetPath, Buffer.from(input.bytes));
+
+  return {
+    id: mediaId,
+    url: `/api/proposal-media/${encodeURIComponent(input.proposalId)}/${encodeURIComponent(fileName)}`,
+    storageKey,
+    storageProvider: "local",
+    alt: stripFileExtension(safeName),
+  };
+}
+
+export async function deleteProposalMediaFile(
+  media: Pick<ProposalMediaItem, "storageKey" | "storageProvider">,
+) {
+  if (!media.storageKey) {
+    return;
+  }
+
+  if (media.storageProvider === "supabase") {
+    const supabase = getSupabase();
+
+    if (supabase) {
+      await supabase.storage.from(PROPOSAL_MEDIA_BUCKET).remove([media.storageKey]);
+    }
+
+    return;
+  }
+
+  if (media.storageProvider === "local") {
+    await fs.rm(getLocalMediaPath(media.storageKey.split("/")), {
+      force: true,
+    });
+  }
+}
+
+export async function readLocalProposalMediaFile(pathSegments: string[]) {
+  if (pathSegments.length < 2) {
+    return null;
+  }
+
+  const filePath = getLocalMediaPath(pathSegments);
+  const bytes = await fs.readFile(filePath).catch(() => null);
+
+  if (!bytes) {
+    return null;
+  }
+
+  return {
+    bytes,
+    contentType: getMediaContentType(filePath),
+  };
+}
+
+async function deleteProposalMediaFiles(proposalId: string) {
+  const supabase = getSupabase();
+
+  if (supabase) {
+    const { data, error } = await supabase.storage
+      .from(PROPOSAL_MEDIA_BUCKET)
+      .list(proposalId, { limit: 1000 });
+
+    if (!error && data?.length) {
+      await supabase.storage
+        .from(PROPOSAL_MEDIA_BUCKET)
+        .remove(data.map((item) => `${proposalId}/${item.name}`));
+    }
+  }
+
+  await fs.rm(path.join(localMediaPath, proposalId), {
+    recursive: true,
+    force: true,
+  });
 }
 
 export async function listRetentionCandidateProposals(
@@ -1048,6 +1180,97 @@ async function writeLocalDatabase(database: LocalDatabase) {
   await fs.rename(tmpPath, localDatabasePath);
 }
 
+function getLocalMediaPath(pathSegments: string[]) {
+  const root = path.resolve(localMediaPath);
+  const filePath = path.resolve(root, ...pathSegments);
+
+  if (filePath === root || !filePath.startsWith(`${root}${path.sep}`)) {
+    throw new Error("Invalid proposal media path");
+  }
+
+  return filePath;
+}
+
+function sanitizeMediaFileName(fileName: string, contentType: string) {
+  const originalExtension = path.extname(fileName).toLowerCase();
+  const extension = originalExtension || getExtensionForContentType(contentType);
+  const baseName =
+    path
+      .basename(fileName, originalExtension)
+      .normalize("NFKD")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "media";
+
+  return `${baseName}${extension}`;
+}
+
+function stripFileExtension(fileName: string) {
+  return path.basename(fileName, path.extname(fileName)).replace(/[-_]+/g, " ");
+}
+
+function getExtensionForContentType(contentType: string) {
+  if (contentType === "image/png") {
+    return ".png";
+  }
+
+  if (contentType === "image/webp") {
+    return ".webp";
+  }
+
+  if (contentType === "image/gif") {
+    return ".gif";
+  }
+
+  if (contentType === "image/svg+xml") {
+    return ".svg";
+  }
+
+  return ".jpg";
+}
+
+function getMediaContentType(filePath: string) {
+  const extension = path.extname(filePath).toLowerCase();
+
+  if (extension === ".png") {
+    return "image/png";
+  }
+
+  if (extension === ".webp") {
+    return "image/webp";
+  }
+
+  if (extension === ".gif") {
+    return "image/gif";
+  }
+
+  if (extension === ".svg") {
+    return "image/svg+xml";
+  }
+
+  return "image/jpeg";
+}
+
+async function ensureProposalMediaBucket(supabase: SupabaseClient) {
+  const { error } = await supabase.storage.getBucket(PROPOSAL_MEDIA_BUCKET);
+
+  if (!error) {
+    return;
+  }
+
+  const { error: createError } = await supabase.storage.createBucket(
+    PROPOSAL_MEDIA_BUCKET,
+    { public: true },
+  );
+
+  if (
+    createError &&
+    !createError.message.toLowerCase().includes("already exists")
+  ) {
+    throw new Error(createError.message);
+  }
+}
+
 function supabaseFetch(input: RequestInfo | URL, init?: RequestInit) {
   return undiciFetch(input as Parameters<typeof undiciFetch>[0], {
     ...init,
@@ -1119,6 +1342,7 @@ function fromProposalRow(row: ProposalRow, children: ProposalChildren): Proposal
     retentionHold: row.retention_hold ?? false,
     isPasswordProtected: row.is_password_protected,
     passwordHash: row.password_hash ?? undefined,
+    trustLine: row.trust_line ?? undefined,
     publicNotes: row.public_notes ?? "",
     internalNotes: row.internal_notes ?? "",
     shareSettings: {
@@ -1137,6 +1361,7 @@ function fromProposalRow(row: ProposalRow, children: ProposalChildren): Proposal
     },
     assumptions: row.assumptions ?? [],
     outOfScope: row.out_of_scope ?? [],
+    blocks: row.blocks ?? [],
     ...children,
   });
 }
@@ -1177,6 +1402,7 @@ function toProposalRow(proposal: Proposal): ProposalRow {
     retention_hold: Boolean(proposal.retentionHold),
     is_password_protected: proposal.isPasswordProtected,
     password_hash: proposal.passwordHash ?? null,
+    trust_line: proposal.trustLine ?? null,
     public_notes: proposal.publicNotes ?? null,
     internal_notes: proposal.internalNotes ?? null,
     is_published: proposal.status === "published",
@@ -1191,6 +1417,7 @@ function toProposalRow(proposal: Proposal): ProposalRow {
     discuss_url: proposal.shareSettings.discussUrl,
     assumptions: proposal.assumptions,
     out_of_scope: proposal.outOfScope,
+    blocks: proposal.blocks,
   };
 }
 
