@@ -58,15 +58,11 @@ function unauthorizedResponse(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const loginUrl = request.nextUrl.clone();
-  loginUrl.pathname = "/login";
-  loginUrl.search = "";
-  loginUrl.searchParams.set(
-    "next",
-    `${request.nextUrl.pathname}${request.nextUrl.search}`,
-  );
+  const params = new URLSearchParams({
+    next: `${request.nextUrl.pathname}${request.nextUrl.search}`,
+  });
 
-  return NextResponse.redirect(loginUrl);
+  return redirectToRequestOrigin(request, `/login?${params.toString()}`);
 }
 
 function isProtectedMutatingApi(request: NextRequest) {
@@ -78,8 +74,9 @@ function isProtectedMutatingApi(request: NextRequest) {
 
 function isSameOriginMutation(request: NextRequest) {
   const origin = request.headers.get("origin");
+  const expectedOrigin = getRequestOrigin(request);
 
-  if (origin && origin !== request.nextUrl.origin) {
+  if (origin && origin !== expectedOrigin && origin !== request.nextUrl.origin) {
     return false;
   }
 
@@ -90,4 +87,32 @@ function isSameOriginMutation(request: NextRequest) {
   }
 
   return true;
+}
+
+function redirectToRequestOrigin(request: NextRequest, location: string) {
+  return NextResponse.redirect(new URL(location, getRequestOrigin(request)));
+}
+
+function getRequestOrigin(request: NextRequest) {
+  const forwardedHost = firstForwardedValue(
+    request.headers.get("x-forwarded-host"),
+  );
+
+  if (!forwardedHost) {
+    return request.nextUrl.origin;
+  }
+
+  const forwardedProto = firstForwardedValue(
+    request.headers.get("x-forwarded-proto"),
+  );
+  const protocol =
+    forwardedProto === "http" || forwardedProto === "https"
+      ? forwardedProto
+      : request.nextUrl.protocol.replace(/:$/, "");
+
+  return `${protocol}://${forwardedHost}`;
+}
+
+function firstForwardedValue(value: string | null) {
+  return value?.split(",")[0]?.trim();
 }

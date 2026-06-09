@@ -9,6 +9,7 @@ import {
 import type {
   Proposal,
   ProposalAiInput,
+  ProposalAiInputEnvelope,
   ProposalAiPackage,
   ProposalBlock,
   ProposalBlockType,
@@ -203,8 +204,14 @@ export const proposalAiInputJsonSchema = {
   },
 } as const;
 
-export function createProposalAiExample() {
-  return createProposalAiInputFromProposal(createDemoProposal());
+export function createProposalAiExample(): ProposalAiInputEnvelope {
+  return {
+    system: {
+      kind: "prisma.proposal.ai-input",
+      version: 1,
+    },
+    content: createProposalAiInputFromProposal(createDemoProposal()),
+  };
 }
 
 export function createProposalAiInputFromProposal(

@@ -20,17 +20,14 @@ export async function POST(request: Request) {
 
   if (!isValidAdminSecret(input.secret)) {
     if (wantsHtml) {
-      const loginUrl = new URL("/login", request.url);
-      loginUrl.searchParams.set("error", "1");
-      loginUrl.searchParams.set("next", nextPath);
-      return NextResponse.redirect(loginUrl, { status: 303 });
+      return redirectToRelativePath(createLoginErrorLocation(nextPath));
     }
 
     return NextResponse.json({ error: "Invalid admin secret" }, { status: 401 });
   }
 
   const response = wantsHtml
-    ? NextResponse.redirect(new URL(nextPath, request.url), { status: 303 })
+    ? redirectToRelativePath(nextPath)
     : NextResponse.json({ ok: true });
 
   response.cookies.set(
@@ -80,6 +77,24 @@ function normalizeNextPath(value?: string) {
   }
 
   return value;
+}
+
+function createLoginErrorLocation(nextPath: string) {
+  const params = new URLSearchParams({
+    error: "1",
+    next: nextPath,
+  });
+
+  return `/login?${params.toString()}`;
+}
+
+function redirectToRelativePath(location: string) {
+  return new NextResponse(null, {
+    status: 303,
+    headers: {
+      Location: location,
+    },
+  });
 }
 
 function asString(value: FormDataEntryValue | null) {
