@@ -1,12 +1,13 @@
 import { createHmac } from "crypto";
 import type { Proposal } from "@/lib/types";
+import { requireProdSecret } from "@/lib/server/env";
 
 export function getProposalAccessCookieName(shareSlug: string) {
   return `prisma_access_${shareSlug}`;
 }
 
 export function createProposalAccessToken(proposal: Proposal) {
-  const secret = process.env.PROPOSAL_ACCESS_SECRET || "prisma-dev-secret";
+  const secret = requireProdSecret("PROPOSAL_ACCESS_SECRET");
   const hashBasis = proposal.passwordHash || "no-password";
 
   return createHmac("sha256", secret)

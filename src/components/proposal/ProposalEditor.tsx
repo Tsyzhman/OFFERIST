@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowDown,
@@ -205,6 +205,9 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
   const [selectedArchetypeId, setSelectedArchetypeId] =
     useState<ProposalArchetypeId>(defaultProposalArchetypeId);
   const [currentId, setCurrentId] = useState(mode === "edit" ? initialProposal.id : null);
+  const [hasStoredPassword, setHasStoredPassword] = useState(
+    initialProposal.isPasswordProtected,
+  );
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
@@ -296,7 +299,11 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
   ) {
     const notify = options.notify ?? true;
 
-    if (nextProposal.isPasswordProtected && !nextPassword.trim() && !nextProposal.passwordHash) {
+    if (
+      nextProposal.isPasswordProtected &&
+      !nextPassword.trim() &&
+      !hasStoredPassword
+    ) {
       showToast("warning", "Укажите пароль для защищённой клиентской ссылки.");
       return null;
     }
@@ -319,6 +326,10 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
 
     setProposal(result.proposal);
     setCurrentId(result.proposal.id);
+    setHasStoredPassword(
+      result.proposal.isPasswordProtected &&
+        (hasStoredPassword || Boolean(nextPassword.trim())),
+    );
     setPassword("");
     if (notify) {
       showToast("success", "КП сохранено");
@@ -566,10 +577,12 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
           </SectionCard>
 
           <BlockManager
+            proposal={proposal}
             proposalId={proposal.id}
             canUploadMedia={Boolean(currentId)}
             blocks={proposal.blocks}
             onChange={(blocks) => update({ blocks })}
+            onProposalChange={update}
           />
 
           <SectionCard title="Контекст и решение" eyebrow="Содержание КП">
@@ -642,6 +655,7 @@ export function ProposalEditor({ initialProposal, mode }: ProposalEditorProps) {
           <SharingSettings
             proposal={proposal}
             password={password}
+            hasStoredPassword={hasStoredPassword}
             publicUrl={publicUrl}
             onPasswordChange={setPassword}
             onChange={update}
@@ -826,15 +840,19 @@ function ReadinessWarningsPanel({
 }
 
 function BlockManager({
+  proposal,
   proposalId,
   canUploadMedia,
   blocks,
   onChange,
+  onProposalChange,
 }: {
+  proposal: Proposal;
   proposalId: string;
   canUploadMedia: boolean;
   blocks: ProposalBlock[];
   onChange: (blocks: ProposalBlock[]) => void;
+  onProposalChange: (patch: Partial<Proposal>) => void;
 }) {
   const [selectedType, setSelectedType] =
     useState<ProposalBlockType>("summary");
@@ -943,6 +961,7 @@ function BlockManager({
             return (
               <div
                 key={block.id}
+                data-block-type={block.type}
                 className={`rounded-lg border p-4 transition ${
                   block.visible
                     ? "border-zinc-200 bg-white"
@@ -1038,6 +1057,12 @@ function BlockManager({
                   </div>
                 </div>
 
+                <NativeProposalBlockEditor
+                  block={block}
+                  proposal={proposal}
+                  onChange={onProposalChange}
+                />
+
                 {block.type === "roles" ? (
                   <RolesBlockEditor
                     block={block}
@@ -1098,6 +1123,823 @@ function BlockManager({
         )}
       </div>
     </SectionCard>
+  );
+}
+
+function NativeProposalBlockEditor({
+  block,
+  proposal,
+  onChange,
+}: {
+  block: ProposalBlock;
+  proposal: Proposal;
+  onChange: (patch: Partial<Proposal>) => void;
+}) {
+  function updateShare(patch: Partial<Proposal["shareSettings"]>) {
+    onChange({
+      shareSettings: {
+        ...proposal.shareSettings,
+        ...patch,
+      },
+    });
+  }
+
+  switch (block.type) {
+    case "hero":
+      return (
+        <NativeEditorShell
+          title="Первый экран"
+          copy="Эти поля формируют верхний экран клиентской страницы."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <TextInput
+              label="Название КП"
+              value={proposal.title}
+              onChange={(title) => onChange({ title })}
+            />
+            <TextInput
+              label="Клиент"
+              value={proposal.clientName}
+              onChange={(clientName) => onChange({ clientName })}
+            />
+            <TextInput
+              label="Компания"
+              value={proposal.clientCompany}
+              onChange={(clientCompany) => onChange({ clientCompany })}
+            />
+            <TextInput
+              label="Подготовил"
+              value={proposal.preparedBy}
+              onChange={(preparedBy) => onChange({ preparedBy })}
+            />
+            <TextInput
+              label="Роль отправителя"
+              value={proposal.preparedByRole}
+              onChange={(preparedByRole) => onChange({ preparedByRole })}
+            />
+            <TextInput
+              label="Дата КП"
+              type="date"
+              value={proposal.proposalDate}
+              onChange={(proposalDate) => onChange({ proposalDate })}
+            />
+            <TextInput
+              label="Действительно до"
+              type="date"
+              value={proposal.validUntil}
+              onChange={(validUntil) =>
+                onChange({
+                  validUntil,
+                  expiresAt: proposal.expiresAt || validUntil,
+                })
+              }
+            />
+            <TextInput
+              label="Версия"
+              value={proposal.version}
+              onChange={(version) => onChange({ version })}
+            />
+          </div>
+          <div className="mt-3">
+            <Textarea
+              label="Краткое вступление"
+              rows={4}
+              value={proposal.shortIntro}
+              onChange={(shortIntro) => onChange({ shortIntro })}
+            />
+          </div>
+        </NativeEditorShell>
+      );
+
+    case "summary":
+      return (
+        <NativeEditorShell
+          title="Краткое резюме"
+          copy="Три тезиса, которые клиент увидит сразу после первого экрана."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Textarea
+              label="Проблема клиента"
+              rows={4}
+              value={proposal.clientProblem}
+              onChange={(clientProblem) => onChange({ clientProblem })}
+            />
+            <Textarea
+              label="Бизнес-цель"
+              rows={4}
+              value={proposal.businessGoal}
+              onChange={(businessGoal) => onChange({ businessGoal })}
+            />
+            <Textarea
+              label="Предлагаемое решение"
+              rows={4}
+              value={proposal.proposedSolutionSummary}
+              onChange={(proposedSolutionSummary) =>
+                onChange({ proposedSolutionSummary })
+              }
+            />
+          </div>
+        </NativeEditorShell>
+      );
+
+    case "context":
+      return (
+        <NativeEditorShell
+          title="Контекст клиента"
+          copy="Исходная ситуация и проблема, из которой рождается предложение."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Textarea
+              label="Контекст клиента"
+              rows={5}
+              value={proposal.clientContext}
+              onChange={(clientContext) => onChange({ clientContext })}
+            />
+            <Textarea
+              label="Проблема клиента"
+              rows={5}
+              value={proposal.clientProblem}
+              onChange={(clientProblem) => onChange({ clientProblem })}
+            />
+          </div>
+        </NativeEditorShell>
+      );
+
+    case "solution":
+      return (
+        <NativeEditorShell
+          title="Решение"
+          copy="Описание подхода и причина, почему он подходит именно этому клиенту."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Textarea
+              label="Предлагаемое решение"
+              rows={5}
+              value={proposal.proposedSolutionSummary}
+              onChange={(proposedSolutionSummary) =>
+                onChange({ proposedSolutionSummary })
+              }
+            />
+            <Textarea
+              label="Почему это решение подходит"
+              rows={5}
+              value={proposal.whyUs}
+              onChange={(whyUs) => onChange({ whyUs })}
+            />
+          </div>
+        </NativeEditorShell>
+      );
+
+    case "deliverables":
+      return (
+        <NativeDeliverablesBlockEditor
+          items={proposal.deliverables}
+          onChange={(deliverables) => onChange({ deliverables })}
+        />
+      );
+
+    case "packages":
+      return (
+        <NativePackagesBlockEditor proposal={proposal} onChange={onChange} />
+      );
+
+    case "comparison":
+      return (
+        <NativePackagesBlockEditor
+          proposal={proposal}
+          onChange={onChange}
+          comparison
+        />
+      );
+
+    case "timeline":
+      return (
+        <NativeProcessStepsBlockEditor
+          items={proposal.processSteps}
+          onChange={(processSteps) => onChange({ processSteps })}
+        />
+      );
+
+    case "whyUs":
+      return (
+        <NativeEditorShell
+          title="Почему мы"
+          copy="Аргументы доверия и релевантности команды."
+        >
+          <Textarea
+            label="Почему это решение подходит"
+            rows={5}
+            value={proposal.whyUs}
+            onChange={(whyUs) => onChange({ whyUs })}
+          />
+        </NativeEditorShell>
+      );
+
+    case "proof":
+      return (
+        <NativeProofItemsBlockEditor
+          items={proposal.proofItems}
+          onChange={(proofItems) => onChange({ proofItems })}
+        />
+      );
+
+    case "assumptions":
+      return (
+        <NativeEditorShell
+          title="Допущения"
+          copy="Что считается верным при оценке объёма и стоимости."
+        >
+          <Textarea
+            label="Допущения"
+            rows={6}
+            helper="Каждый пункт с новой строки."
+            value={fromList(proposal.assumptions)}
+            onChange={(value) => onChange({ assumptions: toList(value) })}
+          />
+        </NativeEditorShell>
+      );
+
+    case "outOfScope":
+      return (
+        <NativeEditorShell
+          title="Что не входит"
+          copy="Границы предложения, чтобы не оставлять серых зон."
+        >
+          <Textarea
+            label="Что не входит"
+            rows={6}
+            helper="Каждый пункт с новой строки."
+            value={fromList(proposal.outOfScope)}
+            onChange={(value) => onChange({ outOfScope: toList(value) })}
+          />
+        </NativeEditorShell>
+      );
+
+    case "terms":
+      return (
+        <NativeEditorShell
+          title="Коммерческие условия"
+          copy="Оплата, юридические примечания и ограничения."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Textarea
+              label="Условия оплаты"
+              rows={5}
+              value={proposal.paymentTerms}
+              onChange={(paymentTerms) => onChange({ paymentTerms })}
+            />
+            <Textarea
+              label="Юридические примечания"
+              rows={5}
+              value={proposal.legalNotes}
+              onChange={(legalNotes) => onChange({ legalNotes })}
+            />
+          </div>
+        </NativeEditorShell>
+      );
+
+    case "nextStep":
+      return (
+        <NativeEditorShell
+          title="Следующий шаг"
+          copy="CTA-блок, публичная заметка и ссылки для кнопок."
+        >
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <Textarea
+              label="Следующий шаг"
+              rows={4}
+              value={proposal.nextStepText}
+              onChange={(nextStepText) => onChange({ nextStepText })}
+            />
+            <Textarea
+              label="Публичная заметка"
+              rows={4}
+              value={proposal.publicNotes ?? ""}
+              onChange={(publicNotes) => onChange({ publicNotes })}
+            />
+            <TextInput
+              label="Строка микро-доверия"
+              value={proposal.trustLine ?? ""}
+              placeholder={DEFAULT_TRUST_LINE}
+              onChange={(trustLine) => onChange({ trustLine })}
+            />
+            <TextInput
+              label="Ссылка для «Согласовать»"
+              type="url"
+              value={proposal.shareSettings.approveUrl}
+              onChange={(approveUrl) => updateShare({ approveUrl })}
+            />
+            <TextInput
+              label="Ссылка для «Обсудить»"
+              type="url"
+              value={proposal.shareSettings.discussUrl}
+              onChange={(discussUrl) => updateShare({ discussUrl })}
+            />
+            <Toggle
+              label="Разрешить комментарий клиента"
+              checked={proposal.shareSettings.allowClientComment}
+              onChange={(allowClientComment) =>
+                updateShare({ allowClientComment })
+              }
+            />
+          </div>
+        </NativeEditorShell>
+      );
+
+    default:
+      return null;
+  }
+}
+
+function NativeEditorShell({
+  title,
+  copy,
+  action,
+  children,
+}: {
+  title: string;
+  copy?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mt-4 border-t border-zinc-200 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-zinc-950">{title}</h4>
+          {copy ? (
+            <p className="mt-1 text-xs leading-5 text-zinc-500">{copy}</p>
+          ) : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+      <div className="mt-4">{children}</div>
+    </div>
+  );
+}
+
+function NativeEmptyState({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600">
+      {children}
+    </div>
+  );
+}
+
+function NativeDeliverablesBlockEditor({
+  items,
+  onChange,
+}: {
+  items: ProposalDeliverable[];
+  onChange: (items: ProposalDeliverable[]) => void;
+}) {
+  function updateItem(id: string, patch: Partial<ProposalDeliverable>) {
+    onChange(
+      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addItem() {
+    onChange([
+      ...items,
+      {
+        id: createId(),
+        title: "Новый результат",
+        description: "",
+        clientValue: "",
+        sortOrder: items.length,
+      },
+    ]);
+  }
+
+  return (
+    <NativeEditorShell
+      title="Состав работ"
+      copy="Конкретные результаты и ценность каждого результата для клиента."
+      action={
+        <Button variant="secondary" onClick={addItem}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить
+        </Button>
+      }
+    >
+      {items.length ? (
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <TextInput
+                  label="Название"
+                  value={item.title}
+                  onChange={(title) =>
+                    updateItem(item.id, { title, sortOrder: index })
+                  }
+                />
+                <TextInput
+                  label="Порядок"
+                  type="number"
+                  value={String(item.sortOrder)}
+                  onChange={(sortOrder) =>
+                    updateItem(item.id, {
+                      sortOrder: normalizeNumberInput(sortOrder),
+                    })
+                  }
+                />
+                <Textarea
+                  label="Описание"
+                  rows={3}
+                  value={item.description}
+                  onChange={(description) =>
+                    updateItem(item.id, { description })
+                  }
+                />
+                <Textarea
+                  label="Ценность для клиента"
+                  rows={3}
+                  value={item.clientValue}
+                  onChange={(clientValue) =>
+                    updateItem(item.id, { clientValue })
+                  }
+                />
+              </div>
+              <RemoveButton
+                onClick={() =>
+                  onChange(items.filter((current) => current.id !== item.id))
+                }
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <NativeEmptyState>
+          Добавьте результат, чтобы блок появился на публичной странице.
+        </NativeEmptyState>
+      )}
+    </NativeEditorShell>
+  );
+}
+
+function NativePackagesBlockEditor({
+  proposal,
+  onChange,
+  comparison,
+}: {
+  proposal: Proposal;
+  onChange: (patch: Partial<Proposal>) => void;
+  comparison?: boolean;
+}) {
+  function updateShare(patch: Partial<Proposal["shareSettings"]>) {
+    onChange({
+      shareSettings: {
+        ...proposal.shareSettings,
+        ...patch,
+      },
+    });
+  }
+
+  function updateItem(id: string, patch: Partial<ProposalPackage>) {
+    onChange({
+      packages: proposal.packages.map((item) =>
+        item.id === id ? { ...item, ...patch } : item,
+      ),
+    });
+  }
+
+  function setRecommended(id: string) {
+    onChange({
+      packages: proposal.packages.map((item) => ({
+        ...item,
+        isRecommended: item.id === id,
+      })),
+      selectedPackageId: id,
+    });
+  }
+
+  function addItem() {
+    const id = createId();
+
+    onChange({
+      packages: [
+        ...proposal.packages,
+        {
+          id,
+          name: "Новый пакет",
+          description: "",
+          price: 0,
+          duration: "",
+          isRecommended: false,
+          features: [],
+          sortOrder: proposal.packages.length,
+        },
+      ],
+      selectedPackageId: proposal.selectedPackageId ?? id,
+    });
+  }
+
+  function removeItem(id: string) {
+    const nextPackages = proposal.packages.filter((item) => item.id !== id);
+    const selectedPackageId =
+      proposal.selectedPackageId === id
+        ? nextPackages.find((item) => item.isRecommended)?.id ??
+          nextPackages[0]?.id
+        : proposal.selectedPackageId;
+
+    onChange({
+      packages: nextPackages,
+      selectedPackageId,
+    });
+  }
+
+  return (
+    <NativeEditorShell
+      title={comparison ? "Сравнение пакетов" : "Пакеты и стоимость"}
+      copy={
+        comparison
+          ? "Те же пакеты используются для таблицы сравнения и выбора клиентом."
+          : "Коммерческие варианты, цены, сроки и состав каждого пакета."
+      }
+      action={
+        <Button variant="secondary" onClick={addItem}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить пакет
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Toggle
+          label="Показывать цены"
+          checked={proposal.shareSettings.showPrices}
+          onChange={(showPrices) => updateShare({ showPrices })}
+        />
+        <Toggle
+          label="Показывать сроки"
+          checked={proposal.shareSettings.showTimeline}
+          onChange={(showTimeline) => updateShare({ showTimeline })}
+        />
+        <Toggle
+          label="Разрешить выбор пакета"
+          checked={proposal.shareSettings.allowPackageSelection}
+          onChange={(allowPackageSelection) =>
+            updateShare({ allowPackageSelection })
+          }
+        />
+        <Toggle
+          label="Показывать сравнение пакетов"
+          checked={proposal.shareSettings.showComparisonTable}
+          onChange={(showComparisonTable) =>
+            updateShare({ showComparisonTable })
+          }
+        />
+      </div>
+
+      {proposal.packages.length ? (
+        <div className="mt-4 grid grid-cols-1 gap-3 xl:grid-cols-3">
+          {proposal.packages.map((item, index) => (
+            <div
+              key={item.id}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRecommended(item.id)}
+                  className={`inline-flex items-center gap-2 rounded-md px-2 py-1 text-xs font-semibold ${
+                    item.isRecommended ||
+                    proposal.selectedPackageId === item.id
+                      ? "bg-accent-soft text-accent-strong"
+                      : "bg-white text-zinc-600"
+                  }`}
+                >
+                  <Check size={14} aria-hidden="true" />
+                  Рекомендованный пакет
+                </button>
+                <RemoveButton compact onClick={() => removeItem(item.id)} />
+              </div>
+
+              <div className="mt-4 space-y-3">
+                <TextInput
+                  label="Название"
+                  value={item.name}
+                  onChange={(name) =>
+                    updateItem(item.id, { name, sortOrder: index })
+                  }
+                />
+                <Textarea
+                  label="Описание"
+                  rows={3}
+                  value={item.description}
+                  onChange={(description) =>
+                    updateItem(item.id, { description })
+                  }
+                />
+                <TextInput
+                  label="Стоимость"
+                  type="number"
+                  value={String(item.price)}
+                  onChange={(price) =>
+                    updateItem(item.id, { price: normalizeNumberInput(price) })
+                  }
+                />
+                <TextInput
+                  label="Срок"
+                  value={item.duration}
+                  onChange={(duration) => updateItem(item.id, { duration })}
+                />
+                <Textarea
+                  label="Что входит"
+                  rows={6}
+                  helper="Каждый пункт с новой строки."
+                  value={fromList(item.features)}
+                  onChange={(value) =>
+                    updateItem(item.id, { features: toList(value) })
+                  }
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="mt-4">
+          <NativeEmptyState>
+            Добавьте пакет, чтобы блок появился на публичной странице.
+          </NativeEmptyState>
+        </div>
+      )}
+    </NativeEditorShell>
+  );
+}
+
+function NativeProcessStepsBlockEditor({
+  items,
+  onChange,
+}: {
+  items: ProcessStep[];
+  onChange: (items: ProcessStep[]) => void;
+}) {
+  function updateItem(id: string, patch: Partial<ProcessStep>) {
+    onChange(
+      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addItem() {
+    onChange([
+      ...items,
+      {
+        id: createId(),
+        title: "Новый этап",
+        description: "",
+        duration: "",
+        sortOrder: items.length,
+      },
+    ]);
+  }
+
+  return (
+    <NativeEditorShell
+      title="Сроки и этапы"
+      copy="Процесс, контрольные точки и ожидаемый ритм работ."
+      action={
+        <Button variant="secondary" onClick={addItem}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить этап
+        </Button>
+      }
+    >
+      {items.length ? (
+        <div className="space-y-3">
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="grid grid-cols-1 gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-[1fr_180px]"
+            >
+              <div className="space-y-3">
+                <TextInput
+                  label="Этап"
+                  value={item.title}
+                  onChange={(title) =>
+                    updateItem(item.id, { title, sortOrder: index })
+                  }
+                />
+                <Textarea
+                  label="Описание"
+                  rows={3}
+                  value={item.description}
+                  onChange={(description) =>
+                    updateItem(item.id, { description })
+                  }
+                />
+              </div>
+              <div className="space-y-3">
+                <TextInput
+                  label="Срок"
+                  value={item.duration}
+                  onChange={(duration) => updateItem(item.id, { duration })}
+                />
+                <RemoveButton
+                  onClick={() =>
+                    onChange(
+                      items.filter((current) => current.id !== item.id),
+                    )
+                  }
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <NativeEmptyState>
+          Добавьте этап, чтобы блок появился на публичной странице.
+        </NativeEmptyState>
+      )}
+    </NativeEditorShell>
+  );
+}
+
+function NativeProofItemsBlockEditor({
+  items,
+  onChange,
+}: {
+  items: ProofItem[];
+  onChange: (items: ProofItem[]) => void;
+}) {
+  function updateItem(id: string, patch: Partial<ProofItem>) {
+    onChange(
+      items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    );
+  }
+
+  function addItem() {
+    onChange([
+      ...items,
+      {
+        id: createId(),
+        title: "Новый аргумент",
+        description: "",
+        result: "",
+        sortOrder: items.length,
+      },
+    ]);
+  }
+
+  return (
+    <NativeEditorShell
+      title="Кейсы и доверие"
+      copy="Подтверждения, результаты и сильные аргументы."
+      action={
+        <Button variant="secondary" onClick={addItem}>
+          <Plus size={16} aria-hidden="true" />
+          Добавить
+        </Button>
+      }
+    >
+      {items.length ? (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+            >
+              <div className="space-y-3">
+                <TextInput
+                  label="Заголовок"
+                  value={item.title}
+                  onChange={(title) =>
+                    updateItem(item.id, { title, sortOrder: index })
+                  }
+                />
+                <Textarea
+                  label="Описание"
+                  rows={3}
+                  value={item.description}
+                  onChange={(description) =>
+                    updateItem(item.id, { description })
+                  }
+                />
+                <Textarea
+                  label="Результат"
+                  rows={3}
+                  value={item.result}
+                  onChange={(result) => updateItem(item.id, { result })}
+                />
+              </div>
+              <RemoveButton
+                onClick={() =>
+                  onChange(items.filter((current) => current.id !== item.id))
+                }
+              />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <NativeEmptyState>
+          Добавьте кейс или аргумент, чтобы блок появился на публичной странице.
+        </NativeEmptyState>
+      )}
+    </NativeEditorShell>
   );
 }
 
@@ -2381,6 +3223,7 @@ function readStringArrayProp(value: unknown) {
 function SharingSettings({
   proposal,
   password,
+  hasStoredPassword,
   publicUrl,
   saving,
   onPasswordChange,
@@ -2393,6 +3236,7 @@ function SharingSettings({
 }: {
   proposal: Proposal;
   password: string;
+  hasStoredPassword: boolean;
   publicUrl: string;
   saving: boolean;
   onPasswordChange: (value: string) => void;
@@ -2457,7 +3301,7 @@ function SharingSettings({
             }}
           />
           <TextInput label="Срок действия ссылки" type="date" value={proposal.expiresAt} onChange={(expiresAt) => onChange({ expiresAt, shareSettings: { ...proposal.shareSettings, expiresAt } })} />
-          <TextInput label="Пароль" type="password" value={password} helper={proposal.passwordHash ? "Оставьте пустым, чтобы сохранить текущий пароль." : "Пароль будет сохранён только как hash."} onChange={onPasswordChange} />
+          <TextInput label="Пароль" type="password" value={password} helper={hasStoredPassword ? "Оставьте пустым, чтобы сохранить текущий пароль." : "Пароль будет сохранён только как hash."} onChange={onPasswordChange} />
           <TextInput
             label="Строка микро-доверия"
             value={proposal.trustLine ?? ""}
@@ -2495,7 +3339,7 @@ function SharingSettings({
           <Toggle label="Скрыть от поисковиков" checked={proposal.shareSettings.noIndex} onChange={(noIndex) => updateShare({ noIndex })} />
         </div>
 
-        {proposal.isPasswordProtected && !password && !proposal.passwordHash ? (
+        {proposal.isPasswordProtected && !password && !hasStoredPassword ? (
           <div className="mt-4 flex gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
             <ShieldAlert size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
             Для включения защиты задайте пароль и сохраните настройки.

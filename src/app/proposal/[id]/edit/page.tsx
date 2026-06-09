@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ProposalEditor } from "@/components/proposal/ProposalEditor";
+import { stripServerSecrets } from "@/lib/proposal";
 import { getProposalById } from "@/lib/server/proposal-store";
 
 type PageProps = {
@@ -29,5 +30,5 @@ export default async function EditProposalPage({ params }: PageProps) {
     );
   }
 
-  return <ProposalEditor initialProposal={proposal} mode="edit" />;
+  return <ProposalEditor initialProposal={stripServerSecrets(proposal)} mode="edit" />;
 }

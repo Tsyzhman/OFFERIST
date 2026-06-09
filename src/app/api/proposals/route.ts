@@ -4,12 +4,16 @@ import {
   duplicateProposal,
   listProposals,
 } from "@/lib/server/proposal-store";
+import { stripServerSecrets } from "@/lib/proposal";
 import { ProposalAiValidationError } from "@/lib/proposal-ai";
 import type { ProposalSavePayload } from "@/lib/types";
 
 export async function GET() {
   const { items, total } = await listProposals({ limit: 500 });
-  return NextResponse.json({ proposals: items, total });
+  return NextResponse.json({
+    proposals: items.map(stripServerSecrets),
+    total,
+  });
 }
 
 export async function POST(request: Request) {
@@ -27,12 +31,15 @@ export async function POST(request: Request) {
       );
     }
 
-    return NextResponse.json({ proposal });
+    return NextResponse.json({ proposal: stripServerSecrets(proposal) });
   }
 
   try {
     const proposal = await createProposal(body as Partial<ProposalSavePayload>);
-    return NextResponse.json({ proposal }, { status: 201 });
+    return NextResponse.json(
+      { proposal: stripServerSecrets(proposal) },
+      { status: 201 },
+    );
   } catch (error) {
     if (error instanceof ProposalAiValidationError) {
       return NextResponse.json(

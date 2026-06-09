@@ -11,6 +11,7 @@ import {
   normalizeProposal,
 } from "@/lib/proposal";
 import { createProposalFromAiInput } from "@/lib/proposal-ai";
+import { isProduction } from "@/lib/server/env";
 import type {
   ProcessStep,
   ProofItem,
@@ -1284,13 +1285,25 @@ function getSupabase() {
   }
 
   const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY;
+  const devFallbackKey =
+    process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) {
+  if (!url) {
+    cachedSupabase = null;
+    return cachedSupabase;
+  }
+
+  if (!serviceRoleKey && isProduction()) {
+    throw new Error(
+      "SUPABASE_SERVICE_ROLE_KEY is required in production when SUPABASE_URL is configured",
+    );
+  }
+
+  const key = serviceRoleKey || devFallbackKey;
+
+  if (!key) {
     cachedSupabase = null;
     return cachedSupabase;
   }

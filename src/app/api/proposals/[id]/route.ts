@@ -4,6 +4,7 @@ import {
   getProposalById,
   saveProposal,
 } from "@/lib/server/proposal-store";
+import { stripServerSecrets } from "@/lib/proposal";
 import { ProposalAiValidationError } from "@/lib/proposal-ai";
 import type { ProposalSavePayload } from "@/lib/types";
 
@@ -19,7 +20,7 @@ export async function GET(_request: Request, context: Context) {
     return NextResponse.json({ error: "КП не найдено" }, { status: 404 });
   }
 
-  return NextResponse.json({ proposal });
+  return NextResponse.json({ proposal: stripServerSecrets(proposal) });
 }
 
 export async function PUT(request: Request, context: Context) {
@@ -35,7 +36,7 @@ export async function PUT(request: Request, context: Context) {
 
   try {
     const proposal = await saveProposal(payload, false, id);
-    return NextResponse.json({ proposal });
+    return NextResponse.json({ proposal: stripServerSecrets(proposal) });
   } catch (error) {
     if (error instanceof ProposalAiValidationError) {
       return NextResponse.json(

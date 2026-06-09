@@ -671,11 +671,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 export function sanitizePublicProposal(proposal: Proposal): Proposal {
-  return {
-    ...proposal,
-    passwordHash: undefined,
-    internalNotes: undefined,
-  };
+  const safe = { ...proposal };
+  delete safe.passwordHash;
+  delete safe.internalNotes;
+  return safe;
+}
+
+export function stripServerSecrets(proposal: Proposal): Proposal {
+  const safe = { ...proposal };
+  delete safe.passwordHash;
+  return safe;
 }
 
 export function createBlankProposal(): Proposal {

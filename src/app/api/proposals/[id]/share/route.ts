@@ -4,7 +4,7 @@ import {
   regenerateProposalShareSlug,
   unpublishProposal,
 } from "@/lib/server/proposal-store";
-import { checkProposalReadiness } from "@/lib/proposal";
+import { checkProposalReadiness, stripServerSecrets } from "@/lib/proposal";
 
 type Context = {
   params: Promise<{ id: string }>;
@@ -42,7 +42,7 @@ export async function POST(request: Request, context: Context) {
   }
 
   return NextResponse.json({
-    proposal,
+    proposal: stripServerSecrets(proposal),
     warnings:
       body.action === "publish" ? checkProposalReadiness(proposal) : undefined,
   });

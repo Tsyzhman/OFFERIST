@@ -1,8 +1,16 @@
 doplist.tsyzhman.ru {
   encode zstd gzip
 
-  @publicProposal path /p/*
-  header @publicProposal X-Robots-Tag "noindex, nofollow"
+  @public path /p/* /api/public-events /api/public/* /api/proposal-media/*
+  @admin not path /p/* /api/public-events /api/public/* /api/proposal-media/*
+
+  # Temporary defense until app-level admin auth is deployed everywhere.
+  # Generate with: caddy hash-password
+  basic_auth @admin {
+    admin <bcrypt-hash>
+  }
+
+  header @public X-Robots-Tag "noindex, nofollow"
 
   header {
     X-Content-Type-Options nosniff

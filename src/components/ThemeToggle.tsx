@@ -3,19 +3,23 @@
 import { Moon, Sun } from "lucide-react";
 import { useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
+import { useInitialTheme } from "@/components/ThemeProvider";
 import {
+  DEFAULT_THEME,
+  THEME_CHANGE_EVENT,
+  THEME_COOKIE_MAX_AGE_SECONDS,
+  THEME_COOKIE_NAME,
   isThemeMode,
   THEME_STORAGE_KEY,
   type ThemeMode,
 } from "@/lib/theme";
 
-const THEME_CHANGE_EVENT = "prisma-theme-change";
-
 export function ThemeToggle({ className }: { className?: string }) {
+  const initialTheme = useInitialTheme();
   const theme = useSyncExternalStore(
     subscribeToTheme,
     getThemeSnapshot,
-    getServerThemeSnapshot,
+    () => initialTheme,
   );
   const nextTheme: ThemeMode = theme === "dark" ? "light" : "dark";
   const label =
@@ -74,14 +78,23 @@ function getThemeSnapshot(): ThemeMode {
       return stored;
     }
   } catch {
-    return getServerThemeSnapshot();
+    // Fall through to cookie/system fallback.
   }
 
-  return getServerThemeSnapshot();
+  const cookieTheme = readThemeCookie();
+  if (isThemeMode(cookieTheme)) {
+    return cookieTheme;
+  }
+
+  return getSystemTheme();
 }
 
-function getServerThemeSnapshot(): ThemeMode {
-  return "light";
+function getSystemTheme(): ThemeMode {
+  if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+
+  return DEFAULT_THEME;
 }
 
 function applyTheme(theme: ThemeMode) {
@@ -93,7 +106,27 @@ function applyTheme(theme: ThemeMode) {
   } catch {
     // Theme still applies for the current page when storage is unavailable.
   }
+  writeThemeCookie(theme);
   window.dispatchEvent(
     new CustomEvent<ThemeMode>(THEME_CHANGE_EVENT, { detail: theme }),
   );
+}
+
+function readThemeCookie(): string | null {
+  const prefix = `${THEME_COOKIE_NAME}=`;
+  const item = document.cookie
+    .split("; ")
+    .find((part) => part.startsWith(prefix));
+
+  if (!item) {
+    return null;
+  }
+
+  return decodeURIComponent(item.slice(prefix.length));
+}
+
+function writeThemeCookie(theme: ThemeMode) {
+  document.cookie = `${THEME_COOKIE_NAME}=${encodeURIComponent(
+    theme,
+  )}; Path=/; Max-Age=${THEME_COOKIE_MAX_AGE_SECONDS}; SameSite=Lax`;
 }

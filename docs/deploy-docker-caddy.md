@@ -15,6 +15,7 @@ Current Docker shape:
 - `prisma`: Next.js standalone app on `KP_BUILDER_HOST_PORT` (`3005` by default).
 - `kp-builder-data`: local `.data` volume when Supabase is not configured.
 - Supabase `proposals` stores CTA redirect fields `approve_url` and `discuss_url`, public micro-trust copy in `trust_line`, page composition in `blocks jsonb`, plus explicit `ru`/`RUB` language-currency checks; `proposal_events` accepts `configuration_changed` and `variant_selected` for interactive blocks; media uploads use the public `proposal-media` Supabase Storage bucket or local `.data/proposal-media` in fallback mode; apply `supabase/schema.sql` before deploying code that uses Supabase storage.
+- Admin access is protected by the signed httpOnly `prisma_admin` cookie. Production requires `PROPOSAL_ADMIN_SECRET` and `PROPOSAL_ACCESS_SECRET`; when `SUPABASE_URL` is configured, the server must use `SUPABASE_SERVICE_ROLE_KEY`/`SUPABASE_SERVICE_KEY` and must not fall back to anon keys.
 - Retention/archive work is triggered through the maintenance API endpoint, not a resident Compose worker; purging a proposal also removes related media files from the Supabase bucket/local media directory.
 - Runtime starts with `node server.js` from `.next/standalone`; `npm run start` is not used in the container.
 - Docker logs are capped at 30 MB per service (`json-file`, `10m` x `3`).
@@ -87,9 +88,10 @@ git status
 cp .env.example .env.production
 ```
 
-Сгенерировать секрет для password-cookie:
+Сгенерировать секреты для password-cookie и входа в админку:
 
 ```bash
+openssl rand -hex 32
 openssl rand -hex 32
 ```
 
@@ -103,11 +105,15 @@ nano .env.production
 
 ```env
 PROPOSAL_ACCESS_SECRET=PASTE_LONG_RANDOM_SECRET_HERE
+PROPOSAL_ADMIN_SECRET=PASTE_SECOND_LONG_RANDOM_SECRET_HERE
+PROPOSAL_PUBLIC_ORIGIN=https://doplist.tsyzhman.ru
+KP_BUILDER_HOST_PORT=3005
 
 # Если Supabase пока не подключаем, оставить пустыми.
 # Тогда данные будут храниться в Docker volume /app/.data.
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+PROPOSAL_MAINTENANCE_SECRET=
 ```
 
 Сохранить в nano: `Ctrl+O`, `Enter`, `Ctrl+X`.
@@ -194,8 +200,15 @@ sudo nano /etc/caddy/Caddyfile
 doplist.tsyzhman.ru {
   encode zstd gzip
 
-  @publicProposal path /p/*
-  header @publicProposal X-Robots-Tag "noindex, nofollow"
+  @public path /p/* /api/public-events /api/public/* /api/proposal-media/*
+  @admin not path /p/* /api/public-events /api/public/* /api/proposal-media/*
+
+  # Временный рубеж до полного выката app-level auth; можно оставить вторым рубежом.
+  basic_auth @admin {
+    admin <bcrypt-hash>
+  }
+
+  header @public X-Robots-Tag "noindex, nofollow"
 
   header {
     X-Content-Type-Options nosniff
@@ -204,6 +217,12 @@ doplist.tsyzhman.ru {
 
   reverse_proxy 127.0.0.1:3005
 }
+```
+
+Хеш для `basic_auth` сгенерировать на сервере:
+
+```bash
+caddy hash-password
 ```
 
 Если в `docker-compose.yml` выбрал порт `3017`, то в Caddy должно быть:
@@ -236,9 +255,10 @@ sudo systemctl status caddy --no-pager
 
 ```bash
 curl -I https://doplist.tsyzhman.ru
+curl -I https://doplist.tsyzhman.ru/p/YOUR_SHARE_SLUG
 ```
 
-Открыть в браузере:
+Ожидаемо: корень домена без `basic_auth` вернёт `401`, публичная ссылка `/p/...` останется доступной. Открыть админку в браузере:
 
 ```text
 https://doplist.tsyzhman.ru
@@ -273,6 +293,7 @@ docker compose logs --tail=100 prisma
 ```bash
 curl -I http://127.0.0.1:3005
 curl -I https://doplist.tsyzhman.ru
+curl -I https://doplist.tsyzhman.ru/p/YOUR_SHARE_SLUG
 ```
 
 ## 10. Посмотреть логи
@@ -404,8 +425,14 @@ docker compose up -d --build
 doplist.tsyzhman.ru {
   encode zstd gzip
 
-  @publicProposal path /p/*
-  header @publicProposal X-Robots-Tag "noindex, nofollow"
+  @public path /p/* /api/public-events /api/public/* /api/proposal-media/*
+  @admin not path /p/* /api/public-events /api/public/* /api/proposal-media/*
+
+  basic_auth @admin {
+    admin <bcrypt-hash>
+  }
+
+  header @public X-Robots-Tag "noindex, nofollow"
 
   reverse_proxy prisma:3000
 }

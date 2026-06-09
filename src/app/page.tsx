@@ -1,4 +1,5 @@
 import { DashboardClient } from "@/components/admin/DashboardClient";
+import { stripServerSecrets } from "@/lib/proposal";
 import { listProposals } from "@/lib/server/proposal-store";
 
 type HomeProps = {
@@ -21,7 +22,7 @@ export default async function Home({ searchParams }: HomeProps) {
   return (
     <DashboardClient
       key={`${offset}:${limit}:${items.map((item) => item.id).join(",")}`}
-      proposals={items}
+      proposals={items.map(stripServerSecrets)}
       total={total}
       limit={limit}
       offset={offset}

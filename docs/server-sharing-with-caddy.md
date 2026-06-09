@@ -9,7 +9,7 @@ PRISMA не требует отдельных Caddy-правил для кажд
         ↓
 Caddy принимает HTTPS-запрос
         ↓
-Caddy проксирует запрос в Next.js на 127.0.0.1:3007
+Caddy проксирует запрос в Next.js на 127.0.0.1:3005
         ↓
 Next.js ищет КП по shareSlug в Supabase
         ↓
@@ -22,19 +22,32 @@ Next.js ищет КП по shareSlug в Supabase
 doplist.tsyzhman.ru {
   encode zstd gzip
 
-  @publicProposal path /p/*
-  header @publicProposal X-Robots-Tag "noindex, nofollow"
+  @public path /p/* /api/public-events /api/public/* /api/proposal-media/*
+  @admin not path /p/* /api/public-events /api/public/* /api/proposal-media/*
+
+  # Временный рубеж до полного выката app-level auth; можно оставить вторым рубежом.
+  basic_auth @admin {
+    admin <bcrypt-hash>
+  }
+
+  header @public X-Robots-Tag "noindex, nofollow"
 
   header {
     X-Content-Type-Options nosniff
     Referrer-Policy strict-origin-when-cross-origin
   }
 
-  reverse_proxy 127.0.0.1:3007
+  reverse_proxy 127.0.0.1:3005
 }
 ```
 
 Публичные страницы также имеют meta `robots: noindex, nofollow` внутри Next.js. Caddy-заголовок выше добавлен как дополнительная защита от индексации клиентских КП.
+
+Хеш для `basic_auth` генерируется на сервере:
+
+```bash
+caddy hash-password
+```
 
 ## Production-запуск Next.js
 
@@ -52,9 +65,11 @@ npm run start
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 PROPOSAL_ACCESS_SECRET=
+PROPOSAL_ADMIN_SECRET=
 ```
 
 `PROPOSAL_ACCESS_SECRET` нужен для подписанных cookie доступа к КП с паролем. В production его нужно задать длинной случайной строкой.
+`PROPOSAL_ADMIN_SECRET` нужен для входа в админку и подписания cookie `prisma_admin`; в production он обязателен.
 
 ## Почему не нужны правила под каждую ссылку
 
